@@ -1,16 +1,26 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { anthropic } from '../config/anthropic';
 import DiarioAnalysis from '../models/DiarioAnalysis';
+import { analyzeWithDeepSeekStream } from '../services/together.service';
+import { fetchAndAnalyzeDiario } from '../services/diario.service';
+import { env } from '../config/env';
 
 const analyzeSchema = z.object({
   text: z.string().min(10),
 });
 
+const fetchSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+/**
+ * POST /api/diario/analyze
+ * Analisa texto colado pelo usuário via streaming.
+ */
 export async function analyze(req: Request, res: Response) {
   const { text } = analyzeSchema.parse(req.body);
 
-  if (!anthropic) {
+  if (!env.TOGETHER_API_KEY) {
     return res.status(503).json({ error: 'Serviço de IA não configurado', code: 'AI_UNAVAILABLE' });
   }
 
@@ -21,35 +31,14 @@ export async function analyze(req: Request, res: Response) {
   let fullResponse = '';
 
   try {
-    const stream = anthropic.messages.stream({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
-      messages: [
-        {
-          role: 'user',
-          content: `Analise o seguinte trecho do Diário Oficial do Tocantins. Retorne um JSON com:
-- "summary": resumo geral em português
-- "items": array de objetos com "title", "type" (nomeação, licitação, decreto, portaria, contrato, outro), "description"
-- "alerts": array de itens que merecem atenção especial do cidadão
-- "keywords": array de palavras-chave relevantes
-
-Texto do Diário Oficial:
-${text}`,
-        },
-      ],
+    fullResponse = await analyzeWithDeepSeekStream(text, (chunk) => {
+      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
     });
 
-    for await (const event of stream) {
-      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        fullResponse += event.delta.text;
-        res.write(`data: ${JSON.stringify({ text: event.delta.text })}\n\n`);
-      }
-    }
-
-    // Save analysis
     let parsed: any = {};
     try {
-      parsed = JSON.parse(fullResponse);
+      const clean = fullResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      parsed = JSON.parse(clean);
     } catch {
       parsed = { summary: fullResponse, items: [], alerts: [], keywords: [] };
     }
@@ -60,7 +49,7 @@ ${text}`,
       items: parsed.items || [],
       alerts: parsed.alerts || [],
       keywords: parsed.keywords || [],
-      ai_model: 'claude-sonnet-4-20250514',
+      ai_model: 'deepseek-ai/DeepSeek-V3.1',
       edition_date: new Date(),
     });
 
@@ -72,11 +61,65 @@ ${text}`,
   }
 }
 
+/**
+ * POST /api/diario/fetch
+ * Dispara o download e análise do Diário Oficial.
+ * Body: { date?: "YYYY-MM-DD" } — omitir usa a data de hoje.
+ * Responde imediatamente com status 202 e processa em background.
+ */
+export async function triggerFetch(req: Request, res: Response) {
+  if (!env.TOGETHER_API_KEY) {
+    return res.status(503).json({ error: 'Serviço de IA não configurado', code: 'AI_UNAVAILABLE' });
+  }
+
+  const { date } = fetchSchema.parse(req.body || {});
+
+  // Responde imediatamente
+  res.status(202).json({
+    message: `Download do Diário Oficial iniciado${date ? ` para ${date}` : ' (edição de hoje)'}...`,
+    date: date || new Date().toISOString().split('T')[0],
+  });
+
+  // Processa em background
+  fetchAndAnalyzeDiario(date)
+    .then(result => console.log('[Diário] Resultado:', result.message))
+    .catch(err => console.error('[Diário] Erro:', err.message));
+}
+
+/**
+ * POST /api/diario/fetch/sync
+ * Igual ao fetch mas aguarda o resultado (útil para testes).
+ */
+export async function triggerFetchSync(req: Request, res: Response) {
+  if (!env.TOGETHER_API_KEY) {
+    return res.status(503).json({ error: 'Serviço de IA não configurado', code: 'AI_UNAVAILABLE' });
+  }
+
+  const { date } = fetchSchema.parse(req.body || {});
+
+  try {
+    const result = await fetchAndAnalyzeDiario(date);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+/**
+ * GET /api/diario/analyses
+ */
 export async function listAnalyses(_req: Request, res: Response) {
-  const analyses = await DiarioAnalysis.findAll({ order: [['created_at', 'DESC']], limit: 50 });
+  const analyses = await DiarioAnalysis.findAll({
+    order: [['edition_date', 'DESC']],
+    limit: 50,
+    attributes: ['id', 'edition', 'edition_date', 'summary', 'alerts', 'keywords', 'ai_model', 'created_at'],
+  });
   res.json(analyses);
 }
 
+/**
+ * GET /api/diario/analyses/:id
+ */
 export async function getAnalysis(req: Request, res: Response) {
   const analysis = await DiarioAnalysis.findByPk(req.params.id);
   if (!analysis) return res.status(404).json({ error: 'Análise não encontrada', code: 'NOT_FOUND' });

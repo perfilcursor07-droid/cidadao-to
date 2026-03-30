@@ -6,6 +6,7 @@ import voteRoutes from './vote.routes';
 import ratingRoutes from './rating.routes';
 import newsRoutes from './news.routes';
 import diarioRoutes from './diario.routes';
+import adminRoutes from './admin.routes';
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use('/votes', voteRoutes);
 router.use('/ratings', ratingRoutes);
 router.use('/news', newsRoutes);
 router.use('/diario', diarioRoutes);
+router.use('/admin', adminRoutes);
 
 export default router;

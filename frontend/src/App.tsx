@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/layout/Layout';
+import AdminLayout from './components/layout/AdminLayout';
 import Home from './pages/Home';
 import Politicians from './pages/Politicians';
 import PoliticianDetail from './pages/PoliticianDetail';
@@ -11,6 +12,10 @@ import NewsDetail from './pages/NewsDetail';
 import DiarioOficial from './pages/DiarioOficial';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Dashboard from './pages/admin/Dashboard';
+import AdminDiario from './pages/admin/AdminDiario';
+import AdminPoliticians from './pages/admin/AdminPoliticians';
+import AdminUsers from './pages/admin/AdminUsers';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +39,12 @@ export default function App() {
               <Route path="/diario" element={<DiarioOficial />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+            </Route>
+            <Route element={<AdminLayout />}>
+              <Route path="/admin" element={<Dashboard />} />
+              <Route path="/admin/diario" element={<AdminDiario />} />
+              <Route path="/admin/politicians" element={<AdminPoliticians />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
             </Route>
           </Routes>
         </BrowserRouter>

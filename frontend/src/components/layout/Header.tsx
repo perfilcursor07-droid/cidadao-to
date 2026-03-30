@@ -56,6 +56,11 @@ export default function Header() {
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <div className="flex items-center gap-3">
+                {user?.role === 'admin' && (
+                  <Link to="/admin" className="text-[13px] text-white bg-ink2 px-3 py-1.5 rounded-lg font-medium hover:bg-ink transition-colors">
+                    Admin
+                  </Link>
+                )}
                 <div className="hidden sm:flex items-center gap-2">
                   <div className="w-7 h-7 rounded-full bg-green/10 flex items-center justify-center">
                     <span className="text-green text-xs font-bold">{user?.name?.[0]}</span>

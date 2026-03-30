@@ -14,6 +14,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(10),
   JWT_EXPIRES_IN: z.string().default('7d'),
   ANTHROPIC_API_KEY: z.string().optional(),
+  TOGETHER_API_KEY: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

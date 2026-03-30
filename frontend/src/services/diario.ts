@@ -12,11 +12,26 @@ export interface DiarioAnalysis {
   created_at: string;
 }
 
+export interface FetchResult {
+  success: boolean;
+  message: string;
+  id?: number;
+  date?: string;
+}
+
 export const getAnalyses = () =>
   api.get<DiarioAnalysis[]>('/diario/analyses').then(r => r.data);
 
 export const getAnalysis = (id: number) =>
   api.get<DiarioAnalysis>(`/diario/analyses/${id}`).then(r => r.data);
+
+/** Dispara o download do Diário Oficial em background (resposta imediata). */
+export const triggerFetch = (date?: string) =>
+  api.post<{ message: string; date: string }>('/diario/fetch', date ? { date } : {}).then(r => r.data);
+
+/** Dispara o download e aguarda o resultado completo. */
+export const triggerFetchSync = (date?: string) =>
+  api.post<FetchResult>('/diario/fetch/sync', date ? { date } : {}).then(r => r.data);
 
 export async function* streamAnalysis(text: string) {
   const response = await fetch(
@@ -38,8 +53,12 @@ export async function* streamAnalysis(text: string) {
     const chunk = decoder.decode(value);
     const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
     for (const line of lines) {
-      const data = JSON.parse(line.slice(6));
-      yield data;
+      try {
+        const data = JSON.parse(line.slice(6));
+        yield data;
+      } catch {
+        // ignora linhas malformadas
+      }
     }
   }
 }

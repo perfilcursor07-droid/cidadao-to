@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "WebFetch(domain:diariooficial.to.gov.br)",
+      "WebFetch(domain:doe.to.gov.br)",
+      "WebFetch(domain:www.ioes.to.gov.br)",
+      "WebFetch(domain:central.to.gov.br)",
+      "Bash(node -e \":*)"
+    ]
+  }
+}

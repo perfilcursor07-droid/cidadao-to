@@ -3,6 +3,7 @@ import '../models/index';
 import { seedPoliticians } from './politicians.seeder';
 import { seedPromises } from './promises.seeder';
 import { seedNews } from './news.seeder';
+import { seedAdmin } from './admin.seeder';
 
 async function runSeeders() {
   try {
@@ -10,6 +11,7 @@ async function runSeeders() {
     console.log('Conectado ao banco de dados.\n');
 
     console.log('=== Executando Seeds ===\n');
+    await seedAdmin();
     await seedPoliticians();
     await seedPromises();
     await seedNews();

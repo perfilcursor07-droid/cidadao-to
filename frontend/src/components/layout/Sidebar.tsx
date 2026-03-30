@@ -8,7 +8,7 @@ export default function Sidebar() {
   const top5 = politicians?.slice(0, 5) || [];
 
   return (
-    <aside className="space-y-5">
+    <aside className="space-y-5 sticky top-6 self-start">
       {/* Ranking */}
       <div className="bg-white rounded-lg border border-border overflow-hidden">
         <div className="bg-green px-4 py-2.5">
