@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "cidadao-to-backend": "file:.."
+  }
+}
