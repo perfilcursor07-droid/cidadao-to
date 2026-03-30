@@ -135,8 +135,20 @@ function cleanText(text: string): string {
  * Tenta extrair o número da edição do texto do PDF.
  */
 function extractEditionNumber(text: string): string {
-  const match = text.match(/(?:Edi[çc][aã]o\s*N[ºo°°]?\s*\.?\s*|N[ºo°]\s*)(\d[\d.,]*)/i);
-  return match ? match[1].replace(/[.,]/g, '') : '';
+  // Tenta pegar "Nº 7.027" ou "Edição Nº 7027" ou "ANO XXXVIII - ESTADO DO TOCANTINS ... Nº 7.027"
+  const patterns = [
+    /N[ºo°]\s*\.?\s*([\d.]+)/i,
+    /Edi[çc][aã]o\s*N[ºo°]?\s*\.?\s*([\d.]+)/i,
+    /PALMAS.*?N[ºo°]\s*([\d.]+)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const num = match[1].replace(/\./g, '');
+      if (parseInt(num) > 100) return num; // Ignora números muito pequenos
+    }
+  }
+  return '';
 }
 
 // ─── Função principal ─────────────────────────────────────────────────────────
@@ -208,7 +220,7 @@ export async function fetchAndAnalyzeDiario(
 
   const record = await DiarioAnalysis.create({
     edition: edition || String(editionId),
-    edition_date: new Date(date),
+    edition_date: date as any,
     raw_text: rawText.substring(0, 100000),
     summary: parsed.summary || '',
     items: parsed.items || [],

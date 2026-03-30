@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getAnalyses, getAnalysis, triggerFetchSync, DiarioAnalysis } from '../services/diario';
+import { useQuery } from '@tanstack/react-query';
+import { getAnalyses, getAnalysis, DiarioAnalysis } from '../services/diario';
 import AnalysisResult from '../components/diario/AnalysisResult';
 
 function formatDate(dateStr: string | null): string {
@@ -98,59 +98,13 @@ function EditionCard({
   );
 }
 
-function FetchStatus({ message, success }: { message: string; success: boolean | null }) {
-  if (!message) return null;
-  return (
-    <div
-      className={`rounded-lg px-4 py-3 text-sm flex items-start gap-2 ${
-        success === true
-          ? 'bg-green/5 border border-green/20 text-green'
-          : success === false
-          ? 'bg-red/5 border border-red/20 text-red'
-          : 'bg-blue/5 border border-blue/20 text-blue'
-      }`}
-    >
-      <span>{success === true ? '✅' : success === false ? '❌' : '⏳'}</span>
-      <span>{message}</span>
-    </div>
-  );
-}
-
 export default function DiarioOficial() {
-  const queryClient = useQueryClient();
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [fetching, setFetching] = useState(false);
-  const [fetchStatus, setFetchStatus] = useState<{ message: string; success: boolean | null }>({
-    message: '',
-    success: null,
-  });
 
   const { data: analyses = [], isLoading } = useQuery({
     queryKey: ['diario-analyses'],
     queryFn: getAnalyses,
-    refetchInterval: fetching ? 5000 : false,
   });
-
-  const handleFetch = async (date?: string) => {
-    setFetching(true);
-    setFetchStatus({ message: `Baixando Diário Oficial${date ? ` de ${formatDate(date)}` : ' de hoje'}...`, success: null });
-
-    try {
-      const result = await triggerFetchSync(date);
-      setFetchStatus({ message: result.message, success: result.success });
-      if (result.success) {
-        await queryClient.invalidateQueries({ queryKey: ['diario-analyses'] });
-        if (result.id) setExpandedId(result.id);
-      }
-    } catch (err: any) {
-      setFetchStatus({
-        message: err?.response?.data?.message || err.message || 'Erro ao conectar ao servidor.',
-        success: false,
-      });
-    } finally {
-      setFetching(false);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -188,35 +142,6 @@ export default function DiarioOficial() {
         </div>
       </div>
 
-      {/* Ações */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button
-          onClick={() => handleFetch()}
-          disabled={fetching}
-          className="px-4 py-2 bg-green text-white rounded-lg text-sm font-medium hover:bg-green-dark transition-colors disabled:opacity-50 flex items-center gap-2"
-        >
-          {fetching ? (
-            <>
-              <span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-              Processando...
-            </>
-          ) : (
-            '📥 Baixar edição de hoje'
-          )}
-        </button>
-
-        <button
-          onClick={() => handleFetch('2026-03-27')}
-          disabled={fetching}
-          className="px-4 py-2 border border-border text-ink2 rounded-lg text-sm font-medium hover:bg-surface transition-colors disabled:opacity-50"
-        >
-          Baixar edição 27/03/2026
-        </button>
-      </div>
-
-      {/* Status do fetch */}
-      <FetchStatus message={fetchStatus.message} success={fetchStatus.success} />
-
       {/* Lista de edições */}
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted py-6">
@@ -227,16 +152,9 @@ export default function DiarioOficial() {
         <div className="bg-white border border-border rounded-xl p-8 text-center">
           <div className="text-3xl mb-3">📭</div>
           <h3 className="text-sm font-bold text-ink mb-1">Nenhuma edição analisada ainda</h3>
-          <p className="text-xs text-muted mb-4">
-            Clique em "Baixar edição 27/03/2026" para ver como funciona.
+          <p className="text-xs text-muted">
+            As edições são baixadas e analisadas automaticamente pelo administrador.
           </p>
-          <button
-            onClick={() => handleFetch('2026-03-27')}
-            disabled={fetching}
-            className="px-4 py-2 bg-green text-white rounded-lg text-sm font-medium hover:bg-green-dark transition-colors disabled:opacity-50"
-          >
-            {fetching ? 'Processando...' : 'Baixar primeira edição'}
-          </button>
         </div>
       ) : (
         <div className="space-y-3">
