@@ -154,7 +154,7 @@ function DiarioRow({ d, expanded, onToggle, onDelete, deleting }: {
             <div className="[&_*]:!text-white/70 [&_h3]:!text-white/90">
               <AnalysisResult data={{
                 summary: full.summary ?? undefined,
-                items: full.items ?? undefined,
+                ...((full.items as any) || {}),
                 alerts: full.alerts ?? undefined,
                 keywords: full.keywords ?? undefined,
               }} />

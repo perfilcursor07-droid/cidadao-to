@@ -5,6 +5,9 @@ const menuItems = [
   { to: '/admin', icon: '📊', label: 'Dashboard', exact: true },
   { to: '/admin/diario', icon: '📰', label: 'Diário Oficial' },
   { to: '/admin/politicians', icon: '🏛️', label: 'Políticos' },
+  { to: '/admin/promises', icon: '📋', label: 'Promessas' },
+  { to: '/admin/nepotism', icon: '🔍', label: 'Nepotismo' },
+  { to: '/admin/polls', icon: '📊', label: 'Enquetes' },
   { to: '/admin/users', icon: '👥', label: 'Usuários' },
 ];
 

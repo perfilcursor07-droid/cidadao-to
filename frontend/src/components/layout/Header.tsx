@@ -9,6 +9,7 @@ const navLinks = [
   { to: '/promises', label: 'Promessas' },
   { to: '/news', label: 'Notícias' },
   { to: '/diario', label: 'Diário Oficial' },
+  { to: '/polls', label: 'Enquetes' },
 ];
 
 export default function Header() {

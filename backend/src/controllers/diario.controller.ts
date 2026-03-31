@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import DiarioAnalysis from '../models/DiarioAnalysis';
-import { analyzeWithDeepSeekStream } from '../services/together.service';
+import { analyzeWithDeepSeekStream, chatWithDeepSeekStream } from '../services/together.service';
 import { fetchAndAnalyzeDiario } from '../services/diario.service';
 import { env } from '../config/env';
 
@@ -31,7 +31,7 @@ export async function analyze(req: Request, res: Response) {
   let fullResponse = '';
 
   try {
-    fullResponse = await analyzeWithDeepSeekStream(text, (chunk) => {
+    fullResponse = await analyzeWithDeepSeekStream(text, (chunk: string) => {
       res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
     });
 
@@ -102,6 +102,113 @@ export async function triggerFetchSync(req: Request, res: Response) {
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ success: false, message: error.message });
+  }
+}
+
+const chatSchema = z.object({
+  question: z.string().min(3).max(500),
+});
+
+/**
+ * POST /api/diario/chat
+ * Chat com IA sobre o conteúdo dos diários oficiais via streaming.
+ * Usa análise estruturada (summary + items) de TODOS os diários primeiro,
+ * depois complementa com raw_text se sobrar espaço no contexto.
+ */
+export async function chat(req: Request, res: Response) {
+  const { question } = chatSchema.parse(req.body);
+
+  if (!env.TOGETHER_API_KEY) {
+    return res.status(503).json({ error: 'Serviço de IA não configurado', code: 'AI_UNAVAILABLE' });
+  }
+
+  // Busca os últimos diários com TODOS os campos relevantes
+  const analyses = await DiarioAnalysis.findAll({
+    order: [['edition_date', 'DESC']],
+    limit: 10,
+    attributes: ['id', 'edition', 'edition_date', 'raw_text', 'summary', 'items', 'alerts', 'keywords'],
+  });
+
+  if (analyses.length === 0) {
+    return res.status(404).json({ error: 'Nenhum diário disponível para consulta.' });
+  }
+
+  // FASE 1: Monta contexto com análise estruturada (summary + items) de TODOS os diários
+  // Isso é compacto e garante que a IA veja todas as edições
+  const MAX_CONTEXT = 28000;
+  let context = '';
+
+  for (const a of analyses) {
+    const dateStr = a.edition_date ? new Date(a.edition_date).toISOString().split('T')[0] : 'sem data';
+    let section = `\n=== Edição ${a.edition || '?'} de ${dateStr} ===\n`;
+
+    // Summary
+    if (a.summary) section += `Resumo: ${a.summary}\n`;
+
+    // Alertas
+    const alerts = (a.alerts as string[] | null) || [];
+    if (alerts.length > 0) section += `Alertas: ${alerts.join('; ')}\n`;
+
+    // Keywords
+    const keywords = (a.keywords as string[] | null) || [];
+    if (keywords.length > 0) section += `Palavras-chave: ${keywords.join(', ')}\n`;
+
+    // Items/categories estruturados (contém os detalhes da análise)
+    const items = a.items as any;
+    if (items) {
+      // Categorias com entries
+      if (items.categories && Array.isArray(items.categories)) {
+        for (const cat of items.categories) {
+          section += `\n[${cat.name}] (${cat.count} itens): ${cat.description || ''}\n`;
+          if (cat.entries && Array.isArray(cat.entries)) {
+            for (const entry of cat.entries) {
+              section += `  - ${entry.name}: ${entry.detail || ''}\n`;
+            }
+          }
+        }
+      }
+      // Highlights
+      if (items.highlights && Array.isArray(items.highlights)) {
+        section += `\nDestaques:\n`;
+        for (const h of items.highlights) {
+          section += `  - ${h.title}: ${h.description || ''} ${h.detail ? '| ' + h.detail : ''}\n`;
+        }
+      }
+      // Impact
+      if (items.impact) section += `Impacto: ${items.impact} - ${items.impact_reason || ''}\n`;
+    }
+
+    if (context.length + section.length > MAX_CONTEXT) break;
+    context += section;
+  }
+
+  // FASE 2: Se sobrou espaço, complementa com raw_text dos diários mais recentes
+  const remaining = MAX_CONTEXT - context.length;
+  if (remaining > 2000) {
+    for (const a of analyses) {
+      if (!a.raw_text) continue;
+      const dateStr = a.edition_date ? new Date(a.edition_date).toISOString().split('T')[0] : 'sem data';
+      const header = `\n--- Texto completo Edição ${a.edition || '?'} de ${dateStr} ---\n`;
+      const spaceLeft = MAX_CONTEXT - context.length - header.length;
+      if (spaceLeft < 1000) break;
+      context += header + a.raw_text.substring(0, spaceLeft);
+      if (context.length >= MAX_CONTEXT) break;
+    }
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  try {
+    await chatWithDeepSeekStream(context, question, (chunk: string) => {
+      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+    });
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (error: any) {
+    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
   }
 }
 

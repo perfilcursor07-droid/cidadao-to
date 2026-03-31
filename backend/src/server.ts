@@ -6,6 +6,7 @@ import routes from './routes';
 import { errorHandler } from './middlewares/errorHandler';
 import { startScoreJob } from './jobs/score.job';
 import { startDiarioJob } from './jobs/diario.job';
+import { startPromisesJob } from './jobs/promises.job';
 import './models';
 
 const app = express();
@@ -22,6 +23,7 @@ async function bootstrap() {
 
     startScoreJob();
     startDiarioJob();
+    startPromisesJob();
 
     app.listen(env.PORT, () => {
       console.log(`Servidor rodando na porta ${env.PORT}`);

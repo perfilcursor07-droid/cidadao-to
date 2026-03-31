@@ -11,6 +11,10 @@ export interface Politician {
   score: number;
   total_votes: number;
   active: boolean;
+  promises_total?: number;
+  promises_done?: number;
+  promises_progress?: number;
+  promises_failed?: number;
 }
 
 export interface PoliticianVotes {

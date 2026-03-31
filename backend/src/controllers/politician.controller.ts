@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { Op } from 'sequelize';
+import { Op, fn, col, literal } from 'sequelize';
 import { Politician, PromiseModel, Vote, Rating } from '../models';
 import { fetchAllPoliticosTO } from '../services/tse.service';
 
@@ -12,13 +12,62 @@ export async function list(req: Request, res: Response) {
   if (search) where.name = { [Op.like]: `%${search}%` };
 
   const politicians = await Politician.findAll({ where, order: [['score', 'DESC']] });
-  res.json(politicians);
+
+  // Busca contagem de promessas por político
+  const ids = politicians.map(p => p.id);
+  const promiseCounts = await PromiseModel.findAll({
+    where: { politician_id: { [Op.in]: ids } },
+    attributes: [
+      'politician_id',
+      [fn('COUNT', col('id')), 'total'],
+      [fn('SUM', literal("CASE WHEN status = 'done' THEN 1 ELSE 0 END")), 'done'],
+      [fn('SUM', literal("CASE WHEN status = 'progress' THEN 1 ELSE 0 END")), 'progress'],
+      [fn('SUM', literal("CASE WHEN status = 'failed' THEN 1 ELSE 0 END")), 'failed'],
+    ],
+    group: ['politician_id'],
+    raw: true,
+  }) as any[];
+
+  const countMap = new Map(promiseCounts.map((c: any) => [c.politician_id, c]));
+
+  const result = politicians.map(p => {
+    const counts = countMap.get(p.id);
+    return {
+      ...p.toJSON(),
+      promises_total: Number(counts?.total || 0),
+      promises_done: Number(counts?.done || 0),
+      promises_progress: Number(counts?.progress || 0),
+      promises_failed: Number(counts?.failed || 0),
+    };
+  });
+
+  res.json(result);
 }
 
 export async function getById(req: Request, res: Response) {
   const politician = await Politician.findByPk(req.params.id);
   if (!politician) return res.status(404).json({ error: 'Político não encontrado', code: 'NOT_FOUND' });
-  res.json(politician);
+
+  // Contagem de promessas
+  const promiseCounts = await PromiseModel.findAll({
+    where: { politician_id: politician.id },
+    attributes: [
+      [fn('COUNT', col('id')), 'total'],
+      [fn('SUM', literal("CASE WHEN status = 'done' THEN 1 ELSE 0 END")), 'done'],
+      [fn('SUM', literal("CASE WHEN status = 'progress' THEN 1 ELSE 0 END")), 'progress'],
+      [fn('SUM', literal("CASE WHEN status = 'failed' THEN 1 ELSE 0 END")), 'failed'],
+    ],
+    raw: true,
+  }) as any[];
+
+  const counts = promiseCounts[0] || {};
+  res.json({
+    ...politician.toJSON(),
+    promises_total: Number(counts.total || 0),
+    promises_done: Number(counts.done || 0),
+    promises_progress: Number(counts.progress || 0),
+    promises_failed: Number(counts.failed || 0),
+  });
 }
 
 export async function getPromises(req: Request, res: Response) {

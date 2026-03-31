@@ -43,3 +43,10 @@ export async function update(req: Request, res: Response) {
   await promise.update(data);
   res.json(promise);
 }
+
+export async function remove(req: Request, res: Response) {
+  const promise = await PromiseModel.findByPk(req.params.id);
+  if (!promise) return res.status(404).json({ error: 'Promessa não encontrada', code: 'NOT_FOUND' });
+  await promise.destroy();
+  res.json({ message: 'Promessa removida' });
+}

@@ -16,6 +16,10 @@ import Dashboard from './pages/admin/Dashboard';
 import AdminDiario from './pages/admin/AdminDiario';
 import AdminPoliticians from './pages/admin/AdminPoliticians';
 import AdminUsers from './pages/admin/AdminUsers';
+import AdminPromises from './pages/admin/AdminPromises';
+import AdminNepotism from './pages/admin/AdminNepotism';
+import AdminPolls from './pages/admin/AdminPolls';
+import Polls from './pages/Polls';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -37,6 +41,7 @@ export default function App() {
               <Route path="/news" element={<News />} />
               <Route path="/news/:id" element={<NewsDetail />} />
               <Route path="/diario" element={<DiarioOficial />} />
+              <Route path="/polls" element={<Polls />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
             </Route>
@@ -44,6 +49,9 @@ export default function App() {
               <Route path="/admin" element={<Dashboard />} />
               <Route path="/admin/diario" element={<AdminDiario />} />
               <Route path="/admin/politicians" element={<AdminPoliticians />} />
+              <Route path="/admin/promises" element={<AdminPromises />} />
+              <Route path="/admin/nepotism" element={<AdminNepotism />} />
+              <Route path="/admin/polls" element={<AdminPolls />} />
               <Route path="/admin/users" element={<AdminUsers />} />
             </Route>
           </Routes>

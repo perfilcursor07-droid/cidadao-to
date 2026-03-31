@@ -5,7 +5,7 @@ import { analyzeWithDeepSeek } from './together.service';
 import { env } from '../config/env';
 
 const DOETO_URL = 'https://doe.to.gov.br';
-const MAX_TEXT_CHARS = 15000;
+const MAX_TEXT_CHARS = 30000;
 
 // Referência conhecida: edição 27/03/2026 = ID 5656
 const REFERENCE_DATE = '2026-03-27';
@@ -208,22 +208,30 @@ export async function fetchAndAnalyzeDiario(
   }
 
   // Parseia JSON da resposta
-  let parsed: { summary: string; items: object[]; alerts: string[]; keywords: string[] };
+  let parsed: any;
   try {
     const clean = aiResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     parsed = JSON.parse(clean);
   } catch {
-    parsed = { summary: aiResponse, items: [], alerts: [], keywords: [] };
+    parsed = { summary: aiResponse, categories: [], highlights: [], alerts: [], keywords: [] };
   }
 
   const edition = extractEditionNumber(rawText);
+
+  // Salva tudo no campo items (que é JSON) pra manter compatibilidade
+  const fullData = {
+    categories: parsed.categories || [],
+    highlights: parsed.highlights || [],
+    impact: parsed.impact || 'neutro',
+    impact_reason: parsed.impact_reason || '',
+  };
 
   const record = await DiarioAnalysis.create({
     edition: edition || String(editionId),
     edition_date: date as any,
     raw_text: rawText.substring(0, 100000),
     summary: parsed.summary || '',
-    items: parsed.items || [],
+    items: fullData,
     alerts: parsed.alerts || [],
     keywords: parsed.keywords || [],
     ai_model: 'deepseek-ai/DeepSeek-V3.1',

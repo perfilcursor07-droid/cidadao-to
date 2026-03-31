@@ -27,3 +27,18 @@ export const adminDeleteDiario = (id: number) =>
 
 export const adminSyncPoliticians = () =>
   api.post('/admin/politicians/sync').then(r => r.data);
+
+export const adminResetPoliticians = () =>
+  api.post('/admin/politicians/reset').then(r => r.data);
+
+export const adminResearchPromises = (politicianId: number) =>
+  api.post(`/admin/promises/research/${politicianId}`).then(r => r.data);
+
+export const adminResearchAllPromises = () =>
+  api.post('/admin/promises/research-all').then(r => r.data);
+
+export const adminUpdatePromisesStatus = () =>
+  api.post('/admin/promises/update-status').then(r => r.data);
+
+export const adminResetPromises = () =>
+  api.post('/admin/promises/reset').then(r => r.data);

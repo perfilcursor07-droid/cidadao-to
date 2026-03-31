@@ -1,7 +1,10 @@
 import { Router } from 'express';
-import { analyze, listAnalyses, getAnalysis, triggerFetch, triggerFetchSync } from '../controllers/diario.controller';
+import { analyze, listAnalyses, getAnalysis, triggerFetch, triggerFetchSync, chat } from '../controllers/diario.controller';
 
 const router = Router();
+
+// Chat com IA sobre diários
+router.post('/chat', chat);
 
 // Análise manual de texto via streaming
 router.post('/analyze', analyze);
