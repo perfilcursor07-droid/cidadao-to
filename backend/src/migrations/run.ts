@@ -9,6 +9,7 @@ import { up as createDiario } from './007_create_diario_analyses';
 import { up as addCoverUrl } from './008_add_cover_url_to_news';
 import { up as createNepotism } from './009_create_nepotism_alerts';
 import { up as createPolls } from './010_create_polls';
+import { up as createExpenses } from './011_create_expenses';
 
 const migrations = [
   { name: '001_create_users', fn: createUsers },
@@ -21,6 +22,7 @@ const migrations = [
   { name: '008_add_cover_url_to_news', fn: addCoverUrl },
   { name: '009_create_nepotism_alerts', fn: createNepotism },
   { name: '010_create_polls', fn: createPolls },
+  { name: '011_create_expenses', fn: createExpenses },
 ];
 
 async function runMigrations() {

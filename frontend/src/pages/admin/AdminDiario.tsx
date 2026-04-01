@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import { getAdminDiarios, adminFetchDiario, adminDeleteDiario } from '../../services/admin';
 import { getAnalysis, DiarioAnalysis } from '../../services/diario';
 import AnalysisResult from '../../components/diario/AnalysisResult';
+
+const fadeUp = { hidden: { opacity: 0, y: 12 }, visible: { opacity: 1, y: 0, transition: { duration: 0.35 } } };
+const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.05 } } };
 
 function formatDate(d: string | null) {
   if (!d) return '—';
@@ -56,7 +60,7 @@ export default function AdminDiario() {
       </div>
 
       {/* Fetch card */}
-      <div className="bg-white/5 border border-white/10 rounded-xl p-5">
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
         <h2 className="text-sm font-bold text-white mb-3">📥 Baixar edição por data</h2>
         <div className="flex items-end gap-3 flex-wrap">
           <div>
@@ -90,16 +94,17 @@ export default function AdminDiario() {
             {status.ok === true ? '✅' : status.ok === false ? '❌' : '⏳'} {status.msg}
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Lista */}
       <div>
         <h2 className="text-sm font-bold text-white mb-3">
           {isLoading ? 'Carregando...' : `${diarios.length} edições analisadas`}
         </h2>
-        <div className="space-y-2">
+        <motion.div variants={stagger} initial="hidden" animate="visible" className="space-y-2">
           {diarios.map((d: DiarioAnalysis) => (
-            <DiarioRow
+            <motion.div key={d.id} variants={fadeUp}>
+              <DiarioRow
               key={d.id}
               d={d}
               expanded={expandedId === d.id}
@@ -107,8 +112,9 @@ export default function AdminDiario() {
               onDelete={() => handleDelete(d.id)}
               deleting={deleting === d.id}
             />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </div>
   );
@@ -124,10 +130,10 @@ function DiarioRow({ d, expanded, onToggle, onDelete, deleting }: {
   });
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.1] transition-colors">
       <div className="flex items-center justify-between px-4 py-3">
         <button onClick={onToggle} className="flex-1 text-left flex items-center gap-3">
-          <span className="text-xs font-bold text-white/70 bg-white/5 px-2 py-0.5 rounded">
+          <span className="text-xs font-bold text-white/70 bg-white/[0.06] px-2 py-0.5 rounded">
             {formatDate(d.edition_date)}
           </span>
           {d.edition && <span className="text-xs text-white/30">Nº {d.edition}</span>}

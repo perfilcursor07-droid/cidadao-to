@@ -28,6 +28,12 @@ export const adminDeleteDiario = (id: number) =>
 export const adminSyncPoliticians = () =>
   api.post('/admin/politicians/sync').then(r => r.data);
 
+export const adminFetchPhotos = () =>
+  api.post('/admin/politicians/photos/sync').then(r => r.data);
+
+export const adminSearchPhoto = (name: string, role: string) =>
+  api.post<{ found: boolean; photo_url: string | null }>('/admin/politicians/photos/search', { name, role }).then(r => r.data);
+
 export const adminResetPoliticians = () =>
   api.post('/admin/politicians/reset').then(r => r.data);
 

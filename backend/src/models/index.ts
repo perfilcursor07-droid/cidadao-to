@@ -8,6 +8,7 @@ import DiarioAnalysis from './DiarioAnalysis';
 import NepotismAlert from './NepotismAlert';
 import Poll from './Poll';
 import PollVote from './PollVote';
+import Expense from './Expense';
 
 // Associations
 Politician.hasMany(PromiseModel, { foreignKey: 'politician_id', as: 'promises' });
@@ -33,4 +34,7 @@ Poll.hasMany(PollVote, { foreignKey: 'poll_id', as: 'votes' });
 PollVote.belongsTo(Poll, { foreignKey: 'poll_id', as: 'poll' });
 PollVote.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
-export { User, Politician, PromiseModel, Vote, Rating, News, DiarioAnalysis, NepotismAlert, Poll, PollVote };
+Politician.hasMany(Expense, { foreignKey: 'politician_id', as: 'expenses' });
+Expense.belongsTo(Politician, { foreignKey: 'politician_id', as: 'politician' });
+
+export { User, Politician, PromiseModel, Vote, Rating, News, DiarioAnalysis, NepotismAlert, Poll, PollVote, Expense };

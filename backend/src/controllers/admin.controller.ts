@@ -6,6 +6,7 @@ import DiarioAnalysis from '../models/DiarioAnalysis';
 import News from '../models/News';
 import { fetchAndAnalyzeDiario } from '../services/diario.service';
 import { fetchAllPoliticosTO } from '../services/tse.service';
+import { fetchAllMissingPhotos, findPhotoForPolitician } from '../services/photo.service';
 import { researchPoliticianPromises, researchAllPromises, updatePromisesStatus } from '../services/promises.service';
 import { analyzePoliticianNepotism, analyzeAllNepotism } from '../services/nepotism.service';
 import { env } from '../config/env';
@@ -84,6 +85,42 @@ export async function deleteDiario(req: AuthRequest, res: Response) {
   res.json({ message: 'Análise removida' });
 }
 
+// POST /api/admin/politicians/photos — busca fotos de todos sem foto
+export async function fetchPhotos(req: AuthRequest, res: Response) {
+  res.status(202).json({ message: 'Busca de fotos iniciada em background. Pode demorar alguns minutos.' });
+
+  fetchAllMissingPhotos()
+    .then(result => console.log(`[Photos] Concluído: ${result.found} encontradas, ${result.failed} não encontradas`))
+    .catch(err => console.error(`[Photos] Erro: ${err.message}`));
+}
+
+// POST /api/admin/politicians/photos/sync — busca fotos e aguarda resultado
+export async function fetchPhotosSync(req: AuthRequest, res: Response) {
+  try {
+    const result = await fetchAllMissingPhotos();
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
+// POST /api/admin/politicians/photos/search — busca foto de UM político por nome e role
+export async function searchPhoto(req: AuthRequest, res: Response) {
+  const { name, role } = req.body;
+  if (!name) return res.status(400).json({ error: 'Nome é obrigatório' });
+
+  try {
+    const photo = await findPhotoForPolitician(name, role || '');
+    if (photo) {
+      res.json({ found: true, photo_url: photo });
+    } else {
+      res.json({ found: false, photo_url: null });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+}
+
 // POST /api/admin/politicians/sync
 export async function syncPoliticians(req: AuthRequest, res: Response) {
   try {
@@ -100,7 +137,10 @@ export async function syncPoliticians(req: AuthRequest, res: Response) {
         defaults: { ...pol, active: true },
       });
       if (!wasCreated) {
-        await record.update({ party: pol.party, photo_url: pol.photo_url, bio: pol.bio, city: pol.city });
+        // Só atualiza photo_url se a API trouxe uma foto (não sobrescreve com null)
+        const updateData: any = { party: pol.party, bio: pol.bio, city: pol.city };
+        if (pol.photo_url) updateData.photo_url = pol.photo_url;
+        await record.update(updateData);
         updated++;
       } else {
         created++;

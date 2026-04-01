@@ -10,6 +10,7 @@ import Promises from './pages/Promises';
 import News from './pages/News';
 import NewsDetail from './pages/NewsDetail';
 import DiarioOficial from './pages/DiarioOficial';
+import Expenses from './pages/Expenses';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/admin/Dashboard';
@@ -18,8 +19,10 @@ import AdminPoliticians from './pages/admin/AdminPoliticians';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminPromises from './pages/admin/AdminPromises';
 import AdminNepotism from './pages/admin/AdminNepotism';
+import AdminExpenses from './pages/admin/AdminExpenses';
 import AdminPolls from './pages/admin/AdminPolls';
 import Polls from './pages/Polls';
+import VinculosPoliticos from './pages/VinculosPoliticos';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,6 +44,8 @@ export default function App() {
               <Route path="/news" element={<News />} />
               <Route path="/news/:id" element={<NewsDetail />} />
               <Route path="/diario" element={<DiarioOficial />} />
+              <Route path="/expenses" element={<Expenses />} />
+              <Route path="/vinculos" element={<VinculosPoliticos />} />
               <Route path="/polls" element={<Polls />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -51,6 +56,7 @@ export default function App() {
               <Route path="/admin/politicians" element={<AdminPoliticians />} />
               <Route path="/admin/promises" element={<AdminPromises />} />
               <Route path="/admin/nepotism" element={<AdminNepotism />} />
+              <Route path="/admin/expenses" element={<AdminExpenses />} />
               <Route path="/admin/polls" element={<AdminPolls />} />
               <Route path="/admin/users" element={<AdminUsers />} />
             </Route>
