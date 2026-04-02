@@ -31,7 +31,7 @@ function Counter({ value }: { value: number }) {
 }
 
 /* ── Sparkline mini chart ── */
-function Sparkline({ data, color }: { data: number[]; color: string }) {
+function Sparkline({ data, color }: { data: readonly number[]; color: string }) {
   if (data.length < 2) return null;
   const max = Math.max(...data);
   const min = Math.min(...data);
