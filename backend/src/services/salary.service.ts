@@ -1,5 +1,7 @@
 import axios from 'axios';
 import Politician from '../models/Politician';
+import { sequelize } from '../config/database';
+import { QueryTypes } from 'sequelize';
 
 const API_URL = 'https://acessoainformacao.palmas.to.leg.br/api';
 
@@ -288,4 +290,82 @@ export async function buscarSalariosVereadores(ano: number, mes: number) {
   });
 
   return resultados;
+}
+
+// ===================== CACHE =====================
+
+/**
+ * Busca dados do cache. Retorna null se não existir.
+ */
+async function getCache(ano: number, mes: number): Promise<any | null> {
+  try {
+    const rows = await sequelize.query(
+      'SELECT data FROM salary_cache WHERE ano = ? AND mes = ? LIMIT 1',
+      { replacements: [ano, mes], type: QueryTypes.SELECT }
+    ) as any[];
+    if (rows.length > 0 && rows[0].data) {
+      return JSON.parse(rows[0].data);
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Salva dados no cache (upsert).
+ */
+async function setCache(ano: number, mes: number, data: any): Promise<void> {
+  const json = JSON.stringify(data);
+  try {
+    await sequelize.query(
+      `INSERT INTO salary_cache (ano, mes, data, created_at, updated_at)
+       VALUES (?, ?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE data = VALUES(data), updated_at = NOW()`,
+      { replacements: [ano, mes, json], type: QueryTypes.INSERT }
+    );
+  } catch (err: any) {
+    console.error('[SalaryCache] Erro ao salvar cache:', err.message);
+  }
+}
+
+/**
+ * Busca salários dos vereadores COM CACHE.
+ * Retorna do cache se existir, senão busca da API e salva.
+ */
+export async function buscarSalariosVereadoresComCache(ano: number, mes: number) {
+  // 1. Tenta cache
+  const cached = await getCache(ano, mes);
+  if (cached) {
+    console.log(`[Salary] Cache hit para ${mes}/${ano}`);
+    return cached;
+  }
+
+  // 2. Sem cache — busca da API
+  console.log(`[Salary] Cache miss para ${mes}/${ano}, buscando da API...`);
+  const resultados = await buscarSalariosVereadores(ano, mes);
+
+  // 3. Salva no cache
+  await setCache(ano, mes, resultados);
+  console.log(`[Salary] Cache salvo para ${mes}/${ano}`);
+
+  return resultados;
+}
+
+/**
+ * Atualiza o cache do mês anterior (chamado pelo cron nos dias 15 e 30).
+ */
+export async function atualizarCacheSalarios(): Promise<void> {
+  const now = new Date();
+  const mesAnterior = now.getMonth() === 0 ? 12 : now.getMonth();
+  const anoRef = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+
+  console.log(`[SalaryCron] Atualizando cache de salários ${mesAnterior}/${anoRef}...`);
+  try {
+    const resultados = await buscarSalariosVereadores(anoRef, mesAnterior);
+    await setCache(anoRef, mesAnterior, resultados);
+    console.log(`[SalaryCron] Cache atualizado com sucesso para ${mesAnterior}/${anoRef}`);
+  } catch (err: any) {
+    console.error(`[SalaryCron] Erro ao atualizar cache: ${err.message}`);
+  }
 }

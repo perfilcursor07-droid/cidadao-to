@@ -158,32 +158,6 @@ export default function DiarioOficial() {
         </div>
       </motion.div>
 
-      {/* Como funciona — mais compacto */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.15 }}
-        className="grid grid-cols-3 gap-3"
-      >
-        {[
-          { emoji: '📥', title: 'Download automático', desc: 'PDF do DOE-TO baixado diariamente' },
-          { emoji: '🤖', title: 'IA processa', desc: 'DeepSeek simplifica a linguagem' },
-          { emoji: '🔔', title: 'Alertas e resumo', desc: 'O que importa, de forma simples' },
-        ].map((c, i) => (
-          <motion.div
-            key={c.title}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.08 }}
-            className="bg-white border border-border rounded-lg p-3 text-center hover:shadow-card transition-shadow"
-          >
-            <div className="text-xl mb-1">{c.emoji}</div>
-            <h3 className="text-xs font-bold text-ink">{c.title}</h3>
-            <p className="text-[10px] text-muted mt-0.5">{c.desc}</p>
-          </motion.div>
-        ))}
-      </motion.div>
-
       {/* Lista de edições */}
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted py-6">
@@ -210,7 +184,7 @@ export default function DiarioOficial() {
           className="space-y-3"
         >
           <motion.h2 variants={fadeUp} className="text-sm font-bold text-ink2">
-            {analyses.length} edição{analyses.length > 1 ? 'ões' : ''} analisada{analyses.length > 1 ? 's' : ''}
+            {analyses.length} {analyses.length === 1 ? 'edição analisada' : 'edições analisadas'}
           </motion.h2>
           {analyses.map(a => (
             <motion.div key={a.id} variants={fadeUp}>

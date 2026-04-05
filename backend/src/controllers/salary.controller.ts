@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { buscarServidores, buscarServidoresPorVereador, buscarSalariosVereadores } from '../services/salary.service';
+import { buscarServidores, buscarServidoresPorVereador, buscarSalariosVereadoresComCache } from '../services/salary.service';
 
 // GET /api/salaries/search?busca=&ano=&mes=&offset=&limit=
 export async function searchSalaries(req: Request, res: Response) {
@@ -40,7 +40,7 @@ export async function getAllVereadoresSalaries(req: Request, res: Response) {
   const mes = Number(req.query.mes) || new Date().getMonth() + 1;
 
   try {
-    const resultados = await buscarSalariosVereadores(ano, mes);
+    const resultados = await buscarSalariosVereadoresComCache(ano, mes);
     res.json({ ano, mes, resultados });
   } catch (error: any) {
     res.status(502).json({ error: 'Erro ao consultar API de transparência', detail: error.message });

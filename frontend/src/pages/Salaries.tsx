@@ -29,6 +29,8 @@ export default function Salaries() {
   const { data, isLoading, error } = useQuery<{ ano: number; mes: number; resultados: VereadorResult[] }>({
     queryKey: ['salaries-vereadores', ano, mes],
     queryFn: () => api.get(`/salaries/vereadores?ano=${ano}&mes=${mes}`).then(r => r.data),
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
   });
 
   const resultados = (data?.resultados || [])
@@ -219,10 +221,20 @@ export default function Salaries() {
         </div>
       )}
 
-      <div className="mt-6 text-center text-[10px] text-muted">
-        Fonte: <a href="https://acessoainformacao.palmas.to.leg.br" target="_blank" rel="noopener noreferrer" className="text-green hover:underline">
-          Portal de Transparência — Câmara Municipal de Palmas
-        </a>
+      <div className="mt-6 bg-surface border border-border rounded-lg p-4 space-y-1.5">
+        <p className="text-[10px] font-semibold text-ink">Sobre estes dados</p>
+        <p className="text-[10px] text-muted leading-relaxed">
+          ¹ Todos os valores exibidos são dados públicos extraídos do <a href="https://acessoainformacao.palmas.to.leg.br" target="_blank" rel="noopener noreferrer" className="text-green underline hover:text-green-dark">Portal de Transparência da Câmara Municipal de Palmas</a>, conforme a Lei de Acesso à Informação (Lei nº 12.527/2011).
+        </p>
+        <p className="text-[10px] text-muted leading-relaxed">
+          ² O custo total de cada gabinete inclui o salário líquido do vereador(a) e de todos os servidores comissionados lotados em seu gabinete, conforme publicado na folha de pagamento oficial.
+        </p>
+        <p className="text-[10px] text-muted leading-relaxed">
+          ³ O ranking é ordenado pelo custo total (vereador + gabinete) de forma decrescente. Não expressa opinião, juízo de valor ou qualquer tipo de denúncia. O objetivo é facilitar o acesso do cidadão a informações que já são públicas por lei.
+        </p>
+        <p className="text-[10px] text-muted leading-relaxed">
+          ⁴ Os dados são atualizados automaticamente nos dias 15 e 30 de cada mês. A folha de pagamento de um mês é publicada no mês seguinte pela Câmara.
+        </p>
       </div>
     </div>
   );

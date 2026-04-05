@@ -42,6 +42,8 @@ export default function PoliticianDetail() {
     queryKey: ['salary-politician', politicianId, salaryAno, salaryMes],
     queryFn: () => api.get(`/salaries/vereador/${politicianId}?ano=${salaryAno}&mes=${salaryMes}`).then(r => r.data),
     enabled: isVereador,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
   });
 
   if (isLoading) return (
@@ -373,11 +375,14 @@ export default function PoliticianDetail() {
                         </div>
                       )}
 
-                      <p className="text-[9px] text-muted text-center">
-                        <a href="https://acessoainformacao.palmas.to.leg.br" target="_blank" rel="noopener noreferrer" className="text-green hover:underline">
-                          Portal de Transparência — Câmara de Palmas
-                        </a>
-                      </p>
+                      <div className="bg-surface border border-border rounded-lg p-3 space-y-1">
+                        <p className="text-[9px] text-muted leading-relaxed">
+                          ¹ Dados públicos do <a href="https://acessoainformacao.palmas.to.leg.br" target="_blank" rel="noopener noreferrer" className="text-green underline">Portal de Transparência da Câmara de Palmas</a> (Lei nº 12.527/2011).
+                        </p>
+                        <p className="text-[9px] text-muted leading-relaxed">
+                          ² Valores referentes à folha de pagamento do mês selecionado. Este painel não expressa juízo de valor.
+                        </p>
+                      </div>
                     </div>
                   );
                 })()}

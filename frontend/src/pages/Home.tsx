@@ -40,7 +40,8 @@ export default function Home() {
   const { data: salaryData } = useQuery<{ ano: number; mes: number; resultados: any[] }>({
     queryKey: ['home-salaries', anoRef, mesRef],
     queryFn: () => api.get(`/salaries/vereadores?ano=${anoRef}&mes=${mesRef}`).then(r => r.data),
-    staleTime: 1000 * 60 * 30,
+    staleTime: 1000 * 60 * 60,
+    gcTime: 1000 * 60 * 60 * 2,
   });
 
   const ranking = (salaryData?.resultados || [])
@@ -111,10 +112,21 @@ export default function Home() {
           </div>
 
           <Link to="/salaries"
-            className="flex items-center justify-center gap-2 px-5 py-3 bg-red/10 hover:bg-red/20 transition-colors border-t border-white/[0.04]">
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-red/10 hover:bg-red/20 transition-colors border-t border-white/[0.04]">
             <span className="text-xs font-bold text-red">Ver ranking completo de todos os vereadores</span>
             <span className="text-red">→</span>
           </Link>
+          <div className="px-4 py-3 border-t border-white/[0.04] space-y-1">
+            <p className="text-[9px] text-white/25 leading-relaxed">
+              ¹ Todos os valores exibidos são dados públicos extraídos do <a href="https://acessoainformacao.palmas.to.leg.br" target="_blank" rel="noopener noreferrer" className="text-white/40 underline hover:text-white/60">Portal de Transparência da Câmara Municipal de Palmas</a>, conforme a Lei de Acesso à Informação (Lei nº 12.527/2011).
+            </p>
+            <p className="text-[9px] text-white/25 leading-relaxed">
+              ² O custo total inclui o salário líquido do vereador(a) e de todos os servidores lotados em seu gabinete. Os dados referem-se à folha de pagamento do mês indicado.
+            </p>
+            <p className="text-[9px] text-white/25 leading-relaxed">
+              ³ Este painel não expressa opinião ou juízo de valor. Seu objetivo é facilitar o acesso do cidadão a informações que já são públicas por lei.
+            </p>
+          </div>
         </motion.div>
       )}
 
