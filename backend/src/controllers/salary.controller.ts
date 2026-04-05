@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { buscarServidores, buscarServidoresPorVereador, buscarSalariosVereadoresComCache } from '../services/salary.service';
+import { buscarServidores, buscarSalariosVereadoresComCache } from '../services/salary.service';
 
 // GET /api/salaries/search?busca=&ano=&mes=&offset=&limit=
 export async function searchSalaries(req: Request, res: Response) {
@@ -18,6 +18,7 @@ export async function searchSalaries(req: Request, res: Response) {
 }
 
 // GET /api/salaries/vereador/:id?ano=&mes=
+// Usa o cache geral e filtra pelo político
 export async function getSalariesByPolitician(req: Request, res: Response) {
   const Politician = (await import('../models/Politician')).default;
   const politician = await Politician.findByPk(req.params.id);
@@ -27,8 +28,14 @@ export async function getSalariesByPolitician(req: Request, res: Response) {
   const mes = Number(req.query.mes) || new Date().getMonth() + 1;
 
   try {
-    const resultado = await buscarServidoresPorVereador(politician.name, ano, mes);
-    res.json({ politician_id: politician.id, politician_name: politician.name, ...resultado });
+    const todos = await buscarSalariosVereadoresComCache(ano, mes);
+    const match = todos.find((r: any) => r.politician_id === politician.id);
+    res.json({
+      politician_id: politician.id,
+      politician_name: politician.name,
+      total: match?.total || 0,
+      dados: match?.servidores || [],
+    });
   } catch (error: any) {
     res.status(502).json({ error: 'Erro ao consultar API de transparência', detail: error.message });
   }
