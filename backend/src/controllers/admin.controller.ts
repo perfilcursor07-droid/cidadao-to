@@ -155,6 +155,8 @@ export async function syncPoliticians(req: AuthRequest, res: Response) {
 // POST /api/admin/politicians/reset — limpa TODOS os políticos e dados relacionados
 export async function resetPoliticians(req: AuthRequest, res: Response) {
   try {
+    const { NepotismAlert } = await import('../models');
+    await NepotismAlert.destroy({ where: {} });
     await Vote.destroy({ where: {} });
     await Rating.destroy({ where: {} });
     await PromiseModel.destroy({ where: {} });
