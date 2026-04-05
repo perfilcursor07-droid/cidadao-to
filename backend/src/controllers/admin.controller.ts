@@ -8,7 +8,6 @@ import { fetchAndAnalyzeDiario, fetchLastNDiarios } from '../services/diario.ser
 import { fetchAllPoliticosTO } from '../services/tse.service';
 import { fetchAllMissingPhotos, findPhotoForPolitician } from '../services/photo.service';
 import { researchPoliticianPromises, researchAllPromises, updatePromisesStatus, extractPromisesFromPlan } from '../services/promises.service';
-import { analyzePoliticianNepotism, analyzeAllNepotism } from '../services/nepotism.service';
 import { env } from '../config/env';
 
 // PUT /api/admin/politicians/:id — atualiza dados de um político
@@ -153,7 +152,7 @@ export async function syncPoliticians(req: AuthRequest, res: Response) {
   }
 }
 
-// POST /api/admin/politicians/reset — limpa TODOS e recria do seed
+// POST /api/admin/politicians/reset — limpa TODOS os políticos e dados relacionados
 export async function resetPoliticians(req: AuthRequest, res: Response) {
   try {
     await Vote.destroy({ where: {} });
@@ -161,11 +160,7 @@ export async function resetPoliticians(req: AuthRequest, res: Response) {
     await PromiseModel.destroy({ where: {} });
     await Politician.destroy({ where: {} });
 
-    const { seedPoliticians } = await import('../seeders/politicians.seeder');
-    await seedPoliticians();
-
-    const total = await Politician.count();
-    res.json({ message: `Políticos resetados. ${total} registros criados.`, total });
+    res.json({ message: 'Todos os políticos e dados relacionados foram removidos. Use "Sincronizar" para recriar.' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -218,45 +213,6 @@ export async function resetPromises(req: AuthRequest, res: Response) {
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
-}
-
-// GET /api/admin/nepotism
-export async function listNepotismAlerts(req: AuthRequest, res: Response) {
-  const { NepotismAlert } = await import('../models');
-  const alerts = await NepotismAlert.findAll({
-    include: [{ model: Politician, as: 'politician' }],
-    order: [['confidence', 'ASC'], ['created_at', 'DESC']],
-  });
-  res.json(alerts);
-}
-
-// POST /api/admin/nepotism/analyze/:id
-export async function analyzeNepotism(req: AuthRequest, res: Response) {
-  if (!env.TOGETHER_API_KEY) return res.status(503).json({ error: 'TOGETHER_API_KEY não configurada' });
-  try {
-    const result = await analyzePoliticianNepotism(Number(req.params.id));
-    res.json(result);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-}
-
-// POST /api/admin/nepotism/analyze-all
-export async function analyzeAllNepotismEndpoint(req: AuthRequest, res: Response) {
-  if (!env.TOGETHER_API_KEY) return res.status(503).json({ error: 'TOGETHER_API_KEY não configurada' });
-  res.status(202).json({ message: 'Análise de nepotismo iniciada em background.' });
-  analyzeAllNepotism()
-    .then(r => console.log(`[Nepotismo] Concluído: ${r.total_alerts} alertas`))
-    .catch(e => console.error(`[Nepotismo] Erro: ${e.message}`));
-}
-
-// DELETE /api/admin/nepotism/:id
-export async function deleteNepotismAlert(req: AuthRequest, res: Response) {
-  const { NepotismAlert } = await import('../models');
-  const alert = await NepotismAlert.findByPk(req.params.id);
-  if (!alert) return res.status(404).json({ error: 'Alerta não encontrado' });
-  await alert.destroy();
-  res.json({ message: 'Alerta removido' });
 }
 
 // POST /api/admin/diario/fetch-bulk

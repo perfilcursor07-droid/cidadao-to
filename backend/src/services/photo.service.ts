@@ -4,90 +4,98 @@ import Politician from '../models/Politician';
 const CAMARA_API = 'https://dadosabertos.camara.leg.br/api/v2';
 const SENADO_API = 'https://legis.senado.leg.br/dadosabertos';
 const WIKI_API = 'https://pt.wikipedia.org/w/api.php';
+const UA = 'CidadaoTocantins/1.0 (contato@cidadaotocantins.online)';
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+/** Normaliza nome para comparação: remove acentos, lowercase */
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
 
-/**
- * Busca foto de um deputado federal pela API da Câmara.
- */
+/** Verifica se dois nomes têm sobreposição suficiente (pelo menos 2 palavras em comum) */
+function namesMatch(a: string, b: string): boolean {
+  const wordsA = normalizeName(a).split(/\s+/).filter(w => w.length > 2);
+  const wordsB = normalizeName(b).split(/\s+/).filter(w => w.length > 2);
+  const common = wordsA.filter(w => wordsB.includes(w));
+  return common.length >= 2;
+}
+
+/** Busca foto de deputado federal pela API oficial da Câmara */
 async function fetchCamaraPhoto(name: string): Promise<string | null> {
   try {
-    const res = await axios.get(`${CAMARA_API}/deputados`, {
-      params: { nome: name.split(' ')[0], siglaUf: 'TO', itens: 10 },
-      headers: { Accept: 'application/json' },
-      timeout: 8000,
-    });
-    const nameLower = name.toLowerCase();
-    const match = res.data.dados?.find((d: any) =>
-      d.nome?.toLowerCase().includes(nameLower) || nameLower.includes(d.nome?.toLowerCase())
-    );
-    return match?.urlFoto || null;
+    // Busca por cada palavra do nome para aumentar chances
+    const words = name.split(' ').filter(w => w.length > 3);
+    for (const word of words.slice(0, 2)) {
+      const res = await axios.get(`${CAMARA_API}/deputados`, {
+        params: { nome: word, siglaUf: 'TO', itens: 20 },
+        headers: { Accept: 'application/json' },
+        timeout: 10000,
+      });
+      const match = res.data.dados?.find((d: any) => namesMatch(d.nome || '', name));
+      if (match?.urlFoto) return match.urlFoto;
+    }
+    return null;
   } catch { return null; }
 }
 
-/**
- * Busca foto de um senador pela API do Senado.
- */
+/** Busca foto de senador pela API oficial do Senado */
 async function fetchSenadoPhoto(name: string): Promise<string | null> {
   try {
     const res = await axios.get(`${SENADO_API}/senador/lista/atual`, {
       headers: { Accept: 'application/json' },
-      timeout: 8000,
+      timeout: 10000,
     });
     const parlamentares = res.data?.ListaParlamentarEmExercicio?.Parlamentares?.Parlamentar || [];
-    const nameLower = name.toLowerCase();
     const match = parlamentares.find((s: any) => {
-      const n = s.IdentificacaoParlamentar?.NomeParlamentar?.toLowerCase() || '';
-      return n.includes(nameLower) || nameLower.includes(n);
+      const n = s.IdentificacaoParlamentar?.NomeParlamentar || '';
+      return namesMatch(n, name);
     });
     return match?.IdentificacaoParlamentar?.UrlFotoParlamentar || null;
   } catch { return null; }
 }
 
 /**
- * Busca foto na Wikipedia PT via API.
- * Procura pelo nome do político e tenta extrair a imagem principal do artigo.
+ * Busca foto na Wikipedia PT.
+ * Só aceita se o título do artigo contiver o nome do político (evita fotos erradas).
  */
 async function fetchWikipediaPhoto(name: string, role: string): Promise<string | null> {
   try {
-    // Busca o artigo
-    const searchRes = await axios.get(WIKI_API, {
-      params: {
-        action: 'query',
-        list: 'search',
-        srsearch: `${name} político Tocantins`,
-        srlimit: 3,
-        format: 'json',
-        origin: '*',
-      },
-      headers: { 'User-Agent': UA },
-      timeout: 8000,
-    });
+    const queries = [
+      `${name} político Tocantins`,
+      `${name} ${role === 'dep_estadual' ? 'deputado estadual' : role === 'prefeito' ? 'prefeito' : role} Tocantins`,
+      name,
+    ];
 
-    const results = searchRes.data?.query?.search || [];
-    if (results.length === 0) return null;
-
-    // Tenta cada resultado
-    for (const result of results) {
-      const title = result.title;
-      // Busca imagens do artigo
-      const imgRes = await axios.get(WIKI_API, {
-        params: {
-          action: 'query',
-          titles: title,
-          prop: 'pageimages',
-          pithumbsize: 400,
-          format: 'json',
-          origin: '*',
-        },
+    for (const query of queries) {
+      const searchRes = await axios.get(WIKI_API, {
+        params: { action: 'query', list: 'search', srsearch: query, srlimit: 5, format: 'json', origin: '*' },
         headers: { 'User-Agent': UA },
         timeout: 8000,
       });
 
-      const pages = imgRes.data?.query?.pages || {};
-      for (const page of Object.values(pages) as any[]) {
-        if (page.thumbnail?.source) {
-          return page.thumbnail.source;
+      const results = searchRes.data?.query?.search || [];
+
+      for (const result of results) {
+        const title: string = result.title;
+
+        // Só aceita artigo cujo título contenha pelo menos uma palavra significativa do nome
+        const titleNorm = normalizeName(title);
+        const nameWords = normalizeName(name).split(/\s+/).filter(w => w.length > 3);
+        const titleMatch = nameWords.filter(w => titleNorm.includes(w)).length >= 2;
+        if (!titleMatch) continue;
+
+        const imgRes = await axios.get(WIKI_API, {
+          params: { action: 'query', titles: title, prop: 'pageimages', pithumbsize: 400, format: 'json', origin: '*' },
+          headers: { 'User-Agent': UA },
+          timeout: 8000,
+        });
+
+        const pages = imgRes.data?.query?.pages || {};
+        for (const page of Object.values(pages) as any[]) {
+          if (page.thumbnail?.source) return page.thumbnail.source;
         }
       }
     }
@@ -96,66 +104,30 @@ async function fetchWikipediaPhoto(name: string, role: string): Promise<string |
 }
 
 /**
- * Busca foto via Google Images (scraping leve do DuckDuckGo).
- */
-async function fetchDuckDuckGoImage(name: string, role: string): Promise<string | null> {
-  try {
-    const query = `${name} ${role} Tocantins foto`;
-    const res = await axios.get('https://duckduckgo.com/', {
-      params: { q: query, iax: 'images', ia: 'images' },
-      headers: { 'User-Agent': UA },
-      timeout: 8000,
-    });
-    // Tenta extrair vqd token para API de imagens
-    const vqd = (res.data as string).match(/vqd='([^']+)'/)?.[1];
-    if (!vqd) return null;
-
-    const imgRes = await axios.get('https://duckduckgo.com/i.js', {
-      params: { l: 'br-pt', o: 'json', q: query, vqd, f: ',,,', p: 1 },
-      headers: { 'User-Agent': UA },
-      timeout: 8000,
-    });
-
-    const images = imgRes.data?.results || [];
-    // Pega a primeira imagem que parece ser uma foto de pessoa
-    for (const img of images.slice(0, 3)) {
-      if (img.image && !img.image.includes('logo') && !img.image.includes('banner')) {
-        return img.image;
-      }
-    }
-    return null;
-  } catch { return null; }
-}
-
-/**
- * Busca foto para um político usando múltiplas fontes.
- * Ordem: API oficial (Câmara/Senado) → Wikipedia → DuckDuckGo
+ * Busca foto para um político.
+ * Ordem: API oficial (Câmara/Senado) → Wikipedia (com validação de nome)
+ * DuckDuckGo removido por retornar fotos incorretas.
  */
 export async function findPhotoForPolitician(name: string, role: string): Promise<string | null> {
-  // 1. APIs oficiais
   if (role === 'dep_federal') {
     const photo = await fetchCamaraPhoto(name);
     if (photo) return photo;
   }
+
   if (role === 'senador') {
     const photo = await fetchSenadoPhoto(name);
     if (photo) return photo;
   }
 
-  // 2. Wikipedia
+  // Para todos os cargos, tenta Wikipedia com validação
   const wikiPhoto = await fetchWikipediaPhoto(name, role);
   if (wikiPhoto) return wikiPhoto;
-
-  // 3. DuckDuckGo Images
-  const ddgPhoto = await fetchDuckDuckGoImage(name, role);
-  if (ddgPhoto) return ddgPhoto;
 
   return null;
 }
 
 /**
- * Busca e atualiza fotos de TODOS os políticos que não têm foto.
- * Retorna estatísticas do processo.
+ * Busca e atualiza fotos de todos os políticos sem foto.
  */
 export async function fetchAllMissingPhotos(): Promise<{
   total: number;
@@ -176,26 +148,23 @@ export async function fetchAllMissingPhotos(): Promise<{
   let failed = 0;
 
   for (const pol of withoutPhoto) {
-    console.log(`[Photos] Buscando foto: ${pol.name} (${pol.role})...`);
+    console.log(`[Photos] Buscando: ${pol.name} (${pol.role})...`);
     try {
       const photo = await findPhotoForPolitician(pol.name, pol.role);
       if (photo) {
         await pol.update({ photo_url: photo });
-        details.push({ name: pol.name, status: `✅ Foto encontrada` });
+        details.push({ name: pol.name, status: `✅ Encontrada` });
         found++;
-        console.log(`[Photos] ✅ ${pol.name}: ${photo.substring(0, 60)}...`);
       } else {
         details.push({ name: pol.name, status: '❌ Não encontrada' });
         failed++;
-        console.log(`[Photos] ❌ ${pol.name}: nenhuma foto encontrada`);
       }
     } catch (err: any) {
       details.push({ name: pol.name, status: `❌ Erro: ${err.message}` });
       failed++;
     }
 
-    // Delay entre requisições para não sobrecarregar APIs
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 600));
   }
 
   return { total: withoutPhoto.length, found, failed, details };

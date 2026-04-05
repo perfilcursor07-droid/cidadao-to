@@ -4,8 +4,7 @@ import {
   getStats, listUsers, listDiarios, fetchDiario, deleteDiario, fetchDiarioBulk,
   syncPoliticians, resetPoliticians, updatePolitician, fetchPhotos, fetchPhotosSync, searchPhoto,
   researchPromises, researchAllPromisesEndpoint, updatePromisesStatusEndpoint,
-  resetPromises,
-  listNepotismAlerts, analyzeNepotism, analyzeAllNepotismEndpoint, deleteNepotismAlert
+  resetPromises
 } from '../controllers/admin.controller';
 import { listAllPolls, createPoll, updatePoll, deletePoll } from '../controllers/poll.controller';
 import { syncExpenses } from '../controllers/expense.controller';
@@ -30,10 +29,6 @@ router.post('/promises/research/:id', researchPromises);
 router.post('/promises/research-all', researchAllPromisesEndpoint);
 router.post('/promises/update-status', updatePromisesStatusEndpoint);
 router.post('/promises/reset', resetPromises);
-router.get('/nepotism', listNepotismAlerts);
-router.post('/nepotism/analyze/:id', analyzeNepotism);
-router.post('/nepotism/analyze-all', analyzeAllNepotismEndpoint);
-router.delete('/nepotism/:id', deleteNepotismAlert);
 router.get('/polls', listAllPolls);
 router.post('/polls', createPoll);
 router.put('/polls/:id', updatePoll);

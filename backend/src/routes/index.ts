@@ -10,6 +10,7 @@ import adminRoutes from './admin.routes';
 import pollRoutes from './poll.routes';
 import expenseRoutes from './expense.routes';
 import nepotismRoutes from './nepotism.routes';
+import salaryRoutes from './salary.routes';
 
 const router = Router();
 
@@ -23,6 +24,7 @@ router.use('/diario', diarioRoutes);
 router.use('/polls', pollRoutes);
 router.use('/expenses', expenseRoutes);
 router.use('/nepotism', nepotismRoutes);
+router.use('/salaries', salaryRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

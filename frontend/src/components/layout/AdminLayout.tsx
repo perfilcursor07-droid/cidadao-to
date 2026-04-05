@@ -8,8 +8,8 @@ const menuItems = [
   { to: '/admin/diario', icon: '📜', label: 'Diário Oficial' },
   { to: '/admin/politicians', icon: '🏛️', label: 'Políticos' },
   { to: '/admin/promises', icon: '📋', label: 'Promessas' },
-  { to: '/admin/nepotism', icon: '🔗', label: 'Vínculos Familiares' },
   { to: '/admin/expenses', icon: '💰', label: 'Gastos' },
+  { to: '/admin/salaries', icon: '💵', label: 'Salários' },
   { to: '/admin/polls', icon: '📊', label: 'Enquetes' },
   { to: '/admin/users', icon: '👥', label: 'Usuários' },
 ];

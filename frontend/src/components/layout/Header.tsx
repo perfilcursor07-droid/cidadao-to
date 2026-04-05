@@ -10,7 +10,6 @@ const navLinks = [
   { to: '/news', label: 'Notícias' },
   { to: '/diario', label: 'Diário Oficial' },
   { to: '/expenses', label: 'Gastos' },
-  { to: '/vinculos', label: 'Vínculos Políticos' },
   { to: '/polls', label: 'Enquetes' },
 ];
 

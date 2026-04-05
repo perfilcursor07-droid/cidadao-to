@@ -18,11 +18,13 @@ import AdminDiario from './pages/admin/AdminDiario';
 import AdminPoliticians from './pages/admin/AdminPoliticians';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminPromises from './pages/admin/AdminPromises';
-import AdminNepotism from './pages/admin/AdminNepotism';
 import AdminExpenses from './pages/admin/AdminExpenses';
 import AdminPolls from './pages/admin/AdminPolls';
+import AdminSalaries from './pages/admin/AdminSalaries';
 import Polls from './pages/Polls';
 import VinculosPoliticos from './pages/VinculosPoliticos';
+import Salaries from './pages/Salaries';
+import AdminNepotism from './pages/admin/AdminNepotism';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,6 +48,7 @@ export default function App() {
               <Route path="/diario" element={<DiarioOficial />} />
               <Route path="/expenses" element={<Expenses />} />
               <Route path="/vinculos" element={<VinculosPoliticos />} />
+              <Route path="/salaries" element={<Salaries />} />
               <Route path="/polls" element={<Polls />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
@@ -57,6 +60,7 @@ export default function App() {
               <Route path="/admin/promises" element={<AdminPromises />} />
               <Route path="/admin/nepotism" element={<AdminNepotism />} />
               <Route path="/admin/expenses" element={<AdminExpenses />} />
+              <Route path="/admin/salaries" element={<AdminSalaries />} />
               <Route path="/admin/polls" element={<AdminPolls />} />
               <Route path="/admin/users" element={<AdminUsers />} />
             </Route>
