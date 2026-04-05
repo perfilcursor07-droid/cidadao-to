@@ -18,7 +18,7 @@ export default function NewsDetail() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       {/* Breadcrumb */}
       <div className="text-[11px] text-muted mb-4">
         <Link to="/" className="hover:text-green transition-colors">Início</Link>
