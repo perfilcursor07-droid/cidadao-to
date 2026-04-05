@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware, requireRole } from '../middlewares/auth.middleware';
 import {
-  getStats, listUsers, listDiarios, fetchDiario, deleteDiario,
+  getStats, listUsers, listDiarios, fetchDiario, deleteDiario, fetchDiarioBulk,
   syncPoliticians, resetPoliticians, updatePolitician, fetchPhotos, fetchPhotosSync, searchPhoto,
   researchPromises, researchAllPromisesEndpoint, updatePromisesStatusEndpoint,
   resetPromises,
@@ -18,6 +18,7 @@ router.get('/stats', getStats);
 router.get('/users', listUsers);
 router.get('/diario', listDiarios);
 router.post('/diario/fetch', fetchDiario);
+router.post('/diario/fetch-bulk', fetchDiarioBulk);
 router.delete('/diario/:id', deleteDiario);
 router.post('/politicians/sync', syncPoliticians);
 router.post('/politicians/photos', fetchPhotos);

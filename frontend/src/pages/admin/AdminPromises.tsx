@@ -18,6 +18,9 @@ export default function AdminPromises() {
   const [updating, setUpdating] = useState(false);
   const [aiStatus, setAiStatus] = useState('');
   const [search, setSearch] = useState('');
+  const [pdfModal, setPdfModal] = useState<{ politicianId: number; name: string } | null>(null);
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data: promises = [], isLoading } = useQuery({ queryKey: ['admin-promises'], queryFn: () => getPromises() });
   const { data: politicians = [] } = useQuery({ queryKey: ['admin-politicians-list'], queryFn: () => api.get('/politicians?active=true').then(r => r.data) });
@@ -42,13 +45,30 @@ export default function AdminPromises() {
 
   const handleResearchAll = async () => {
     setResearching(true);
-    setAiStatus('🔍 Pesquisando promessas de todos os políticos...');
+    setAiStatus('🔍 Buscando planos de governo e extraindo promessas de todos os políticos...');
     try {
       const res = await adminResearchAllPromises();
       setAiStatus(`✅ ${res.message}`);
       setTimeout(() => qc.invalidateQueries({ queryKey: ['admin-promises'] }), 3000);
     } catch (err: any) { setAiStatus(`❌ ${err?.response?.data?.error || 'Erro'}`); }
     setResearching(false);
+  };
+
+  const handleExtractFromPdf = async () => {
+    if (!pdfModal) return;
+    setPdfLoading(true);
+    setAiStatus(`📄 Extraindo promessas do plano de governo de ${pdfModal.name}...`);
+    try {
+      const res = await adminResearchPromises(pdfModal.politicianId, pdfUrl || undefined);
+      const msg = res.pdf_url
+        ? `✅ ${res.found} promessas extraídas do plano de ${res.politician} (${res.created} novas)`
+        : `✅ ${res.found} promessas encontradas via notícias para ${res.politician} (${res.created} novas)`;
+      setAiStatus(msg);
+      qc.invalidateQueries({ queryKey: ['admin-promises'] });
+      setPdfModal(null);
+      setPdfUrl('');
+    } catch (err: any) { setAiStatus(`❌ ${err?.response?.data?.error || 'Erro'}`); }
+    setPdfLoading(false);
   };
 
   const handleUpdateStatus = async () => {
@@ -90,11 +110,11 @@ export default function AdminPromises() {
         <div className="flex gap-2 flex-wrap">
           <button onClick={handleResearchAll} disabled={researching || updating}
             className="px-3.5 py-2 bg-blue text-white rounded-lg text-xs font-medium hover:bg-blue-light transition-colors disabled:opacity-40 flex items-center gap-1.5">
-            {researching ? <><span className="w-2.5 h-2.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Pesquisando...</> : '🤖 Pesquisar IA'}
+            {researching ? <><span className="w-2.5 h-2.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Pesquisando...</> : '📄 Extrair planos de governo'}
           </button>
           <button onClick={handleUpdateStatus} disabled={researching || updating}
             className="px-3.5 py-2 bg-white/[0.04] text-white/60 border border-white/[0.06] rounded-lg text-xs font-medium hover:bg-white/[0.06] transition-colors disabled:opacity-40">
-            {updating ? 'Atualizando...' : '🔄 Atualizar status'}
+            {updating ? 'Verificando...' : '🔍 Verificar cumprimento'}
           </button>
           <button onClick={async () => {
             if (!confirm('Apagar TODAS as promessas?')) return;
@@ -205,6 +225,38 @@ export default function AdminPromises() {
         )}
       </AnimatePresence>
 
+      {/* PDF Modal */}
+      <AnimatePresence>
+        {pdfModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => { setPdfModal(null); setPdfUrl(''); }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#1a1d2e] border border-white/[0.08] rounded-xl w-full max-w-lg p-5 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <h2 className="text-sm font-bold text-white">📄 Extrair promessas — {pdfModal.name}</h2>
+              <p className="text-xs text-white/40">Cole a URL do PDF do plano de governo. Se deixar vazio, o sistema vai buscar automaticamente na internet.</p>
+              <div>
+                <label className="block text-[11px] text-white/40 mb-1">URL do PDF (opcional)</label>
+                <input
+                  value={pdfUrl}
+                  onChange={e => setPdfUrl(e.target.value)}
+                  placeholder="https://exemplo.com/plano-de-governo.pdf"
+                  className="w-full bg-white/[0.04] border border-white/[0.08] text-white text-sm rounded-lg px-3 py-2 placeholder:text-white/15"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button onClick={() => { setPdfModal(null); setPdfUrl(''); }} className="px-4 py-2 text-sm text-white/40 hover:text-white/70 transition-colors">Cancelar</button>
+                <button onClick={handleExtractFromPdf} disabled={pdfLoading}
+                  className="px-5 py-2 bg-green text-white rounded-lg text-sm font-medium hover:bg-green-dark disabled:opacity-40 transition-colors flex items-center gap-2">
+                  {pdfLoading ? (
+                    <><span className="w-3 h-3 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Extraindo...</>
+                  ) : '📄 Extrair promessas'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Lista */}
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm text-white/30 py-6">
@@ -221,6 +273,14 @@ export default function AdminPromises() {
             <motion.div key={name} variants={fadeUp} className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden">
               <div className="px-4 py-2.5 border-b border-white/[0.04] flex items-center gap-2">
                 <span className="text-sm font-bold text-white/80">{name}</span>
+                <button
+                  onClick={() => {
+                    const pol = politicians.find((p: any) => p.name === name);
+                    if (pol) setPdfModal({ politicianId: pol.id, name: pol.name });
+                  }}
+                  className="text-[10px] text-blue/60 hover:text-blue transition-colors"
+                  title="Extrair promessas do plano de governo"
+                >📄 Plano</button>
                 <span className="text-[10px] text-white/25 bg-white/[0.04] px-1.5 py-0.5 rounded ml-auto tabular-nums">{items.length}</span>
               </div>
               <div className="divide-y divide-white/[0.03]">

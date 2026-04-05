@@ -22,6 +22,9 @@ export const getAdminDiarios = () =>
 export const adminFetchDiario = (date: string) =>
   api.post('/admin/diario/fetch', { date }).then(r => r.data);
 
+export const adminFetchDiarioBulk = (count: number = 10) =>
+  api.post('/admin/diario/fetch-bulk', { count }, { timeout: 600000 }).then(r => r.data);
+
 export const adminDeleteDiario = (id: number) =>
   api.delete(`/admin/diario/${id}`).then(r => r.data);
 
@@ -37,8 +40,8 @@ export const adminSearchPhoto = (name: string, role: string) =>
 export const adminResetPoliticians = () =>
   api.post('/admin/politicians/reset').then(r => r.data);
 
-export const adminResearchPromises = (politicianId: number) =>
-  api.post(`/admin/promises/research/${politicianId}`).then(r => r.data);
+export const adminResearchPromises = (politicianId: number, pdfUrl?: string) =>
+  api.post(`/admin/promises/research/${politicianId}`, { pdf_url: pdfUrl }, { timeout: 300000 }).then(r => r.data);
 
 export const adminResearchAllPromises = () =>
   api.post('/admin/promises/research-all').then(r => r.data);

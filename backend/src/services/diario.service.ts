@@ -5,99 +5,132 @@ import { analyzeWithDeepSeek } from './together.service';
 import { env } from '../config/env';
 
 const DOETO_URL = 'https://doe.to.gov.br';
+const DOETO_SEARCH_URL = 'https://diariooficial.to.gov.br';
 const MAX_TEXT_CHARS = 30000;
-
-// Referência conhecida: edição 27/03/2026 = ID 5656
-const REFERENCE_DATE = '2026-03-27';
-const REFERENCE_ID = 5656;
 
 const REQUEST_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
   Accept: '*/*',
 };
 
-// ─── Cálculo de ID por dias úteis ────────────────────────────────────────────
+// ─── Scraping da página do DOE-TO ────────────────────────────────────────────
 
 /**
- * Conta dias úteis entre duas datas (segunda a sexta).
- * Positivo se `to` é depois de `from`, negativo se antes.
+ * Converte data DD/MM/YYYY para YYYY-MM-DD
  */
-function countBusinessDays(from: string, to: string): number {
-  const d1 = new Date(from + 'T12:00:00Z');
-  const d2 = new Date(to + 'T12:00:00Z');
-
-  if (d1.getTime() === d2.getTime()) return 0;
-
-  const forward = d2 > d1;
-  const start = forward ? d1 : d2;
-  const end = forward ? d2 : d1;
-
-  let count = 0;
-  const cursor = new Date(start);
-  cursor.setUTCDate(cursor.getUTCDate() + 1);
-
-  while (cursor <= end) {
-    const day = cursor.getUTCDay(); // 0=Dom, 6=Sáb
-    if (day !== 0 && day !== 6) count++;
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-
-  return forward ? count : -count;
+function parseBrDate(brDate: string): string {
+  const [d, m, y] = brDate.split('/');
+  return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
 }
 
 /**
- * Estima o ID da edição para uma data específica baseando-se
- * na referência conhecida e contagem de dias úteis.
+ * Faz scraping da página principal do DOE-TO e retorna um mapa de data → IDs.
+ * Tenta ambos os domínios (doe.to.gov.br e diariooficial.to.gov.br).
  */
-function estimateEditionId(date: string): number {
-  const delta = countBusinessDays(REFERENCE_DATE, date);
-  return REFERENCE_ID + delta;
+async function scrapeEditionMap(): Promise<Map<string, number[]>> {
+  const map = new Map<string, number[]>();
+  const urls = [DOETO_URL, DOETO_SEARCH_URL];
+
+  for (const baseUrl of urls) {
+    try {
+      const res = await axios.get(baseUrl, {
+        timeout: 15000,
+        headers: { ...REQUEST_HEADERS, Accept: 'text/html' },
+        maxRedirects: 5,
+      });
+      const html: string = res.data;
+
+      // Regex para capturar links de download com ID e a data associada
+      const pattern = /diario\/(\d+)\/download.*?(\d{2}\/\d{2}\/\d{4})/gs;
+      let match: RegExpExecArray | null;
+
+      while ((match = pattern.exec(html)) !== null) {
+        const id = parseInt(match[1]);
+        const dateStr = parseBrDate(match[2]);
+        const existing = map.get(dateStr) || [];
+        if (!existing.includes(id)) {
+          existing.push(id);
+        }
+        map.set(dateStr, existing);
+      }
+
+      if (map.size > 0) {
+        console.log(`[Diário] Scraping (${baseUrl}): ${map.size} datas encontradas`);
+        for (const [date, ids] of map) {
+          console.log(`[Diário]   ${date} → IDs: ${ids.join(', ')}`);
+        }
+        return map;
+      }
+    } catch (err: any) {
+      console.error(`[Diário] Erro no scraping de ${baseUrl}: ${err.message}`);
+    }
+  }
+
+  return map;
 }
 
-// ─── Verificação e download do PDF ───────────────────────────────────────────
-
 /**
- * Verifica se um ID existe tentando baixar os primeiros bytes do PDF.
+ * Busca o ID da edição para uma data via página de busca do DOE-TO.
+ * URL: https://diariooficial.to.gov.br/busca?por=texto&texto=&data-inicial=YYYY-MM-DD&data-final=YYYY-MM-DD
  */
-async function checkIdExists(id: number): Promise<boolean> {
-  try {
-    const res = await axios.get(`${DOETO_URL}/diario/${id}/download`, {
-      timeout: 10000,
-      responseType: 'arraybuffer',
-      headers: { ...REQUEST_HEADERS, Range: 'bytes=0-1023' },
-      validateStatus: (s) => s === 200 || s === 206,
-    });
-    // Confirma que é um PDF pelos magic bytes %PDF
-    const bytes = Buffer.from(res.data as ArrayBuffer);
-    return bytes.slice(0, 4).toString('ascii') === '%PDF';
-  } catch {
-    return false;
-  }
-}
+async function searchEditionByDate(date: string): Promise<number | null> {
+  const urls = [DOETO_SEARCH_URL, DOETO_URL];
 
-/**
- * Encontra o ID da edição para uma data específica.
- * Começa no ID estimado e tenta ±5 para cobrir feriados.
- */
-async function findEditionId(date: string): Promise<number | null> {
-  const estimated = estimateEditionId(date);
-  console.log(`[Diário] ID estimado para ${date}: ${estimated}`);
+  for (const baseUrl of urls) {
+    try {
+      const searchUrl = `${baseUrl}/busca?por=texto&texto=&data-inicial=${date}&data-final=${date}`;
+      console.log(`[Diário] Buscando via: ${searchUrl}`);
+      const res = await axios.get(searchUrl, {
+        timeout: 15000,
+        headers: { ...REQUEST_HEADERS, Accept: 'text/html' },
+        maxRedirects: 5,
+      });
+      const html: string = res.data;
 
-  // Tenta o estimado primeiro, depois expande o range
-  const candidates: number[] = [estimated];
-  for (let i = 1; i <= 5; i++) {
-    candidates.push(estimated + i, estimated - i);
-  }
+      // Pega todos os IDs de download na página de resultado
+      const ids: number[] = [];
+      const pattern = /diario\/(\d+)\/download/g;
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(html)) !== null) {
+        const id = parseInt(match[1]);
+        if (!ids.includes(id)) ids.push(id);
+      }
 
-  for (const id of candidates) {
-    if (id <= 0) continue;
-    if (await checkIdExists(id)) {
-      console.log(`[Diário] ID encontrado: ${id}`);
-      return id;
+      if (ids.length > 0) {
+        const bestId = Math.max(...ids);
+        console.log(`[Diário] Busca retornou IDs: ${ids.join(', ')} → usando ${bestId}`);
+        return bestId;
+      }
+    } catch (err: any) {
+      console.error(`[Diário] Erro na busca em ${baseUrl}: ${err.message}`);
     }
   }
 
   return null;
+}
+
+/**
+ * Encontra o ID da edição para uma data específica.
+ * 1. Tenta scraping da página principal
+ * 2. Fallback: busca por data no site
+ */
+async function findEditionId(date: string): Promise<number | null> {
+  console.log(`[Diário] Buscando ID real para ${date}...`);
+
+  // Tenta scraping da página principal
+  const editionMap = await scrapeEditionMap();
+  const ids = editionMap.get(date);
+
+  if (ids && ids.length > 0) {
+    const bestId = Math.max(...ids);
+    console.log(`[Diário] ID encontrado via página principal para ${date}: ${bestId}`);
+    return bestId;
+  }
+
+  console.log(`[Diário] Data ${date} não encontrada na página principal. Tentando busca...`);
+
+  // Fallback: busca por data
+  return searchEditionByDate(date);
 }
 
 /**
@@ -239,4 +272,53 @@ export async function fetchAndAnalyzeDiario(
 
   console.log(`[Diário] Análise de ${date} salva! ID=${record.id} Edição=${edition}`);
   return { success: true, message: `Edição de ${date} (Nº ${edition}) analisada com sucesso!`, id: record.id };
+}
+
+/**
+ * Busca as últimas N edições disponíveis no site do DOE-TO.
+ * Retorna as datas únicas ordenadas (mais recente primeiro).
+ */
+export async function getLatestEditionDates(count: number = 10): Promise<string[]> {
+  const editionMap = await scrapeEditionMap();
+  const dates = Array.from(editionMap.keys()).sort((a, b) => b.localeCompare(a));
+  return dates.slice(0, count);
+}
+
+/**
+ * Baixa e analisa as últimas N edições do DOE-TO.
+ * Processa sequencialmente para não sobrecarregar a API.
+ */
+export async function fetchLastNDiarios(
+  count: number = 10,
+  onProgress?: (current: number, total: number, date: string, result: string) => void
+): Promise<{ total: number; success: number; skipped: number; failed: number; details: string[] }> {
+  const dates = await getLatestEditionDates(count);
+  const details: string[] = [];
+  let success = 0, skipped = 0, failed = 0;
+
+  for (let i = 0; i < dates.length; i++) {
+    const date = dates[i];
+    try {
+      const result = await fetchAndAnalyzeDiario(date);
+      if (result.success && result.message.includes('já analisada')) {
+        skipped++;
+        details.push(`${date}: já analisada`);
+        onProgress?.(i + 1, dates.length, date, 'skipped');
+      } else if (result.success) {
+        success++;
+        details.push(`${date}: ${result.message}`);
+        onProgress?.(i + 1, dates.length, date, 'success');
+      } else {
+        failed++;
+        details.push(`${date}: ${result.message}`);
+        onProgress?.(i + 1, dates.length, date, 'failed');
+      }
+    } catch (err: any) {
+      failed++;
+      details.push(`${date}: Erro - ${err.message}`);
+      onProgress?.(i + 1, dates.length, date, 'failed');
+    }
+  }
+
+  return { total: dates.length, success, skipped, failed, details };
 }

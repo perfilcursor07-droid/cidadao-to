@@ -4,10 +4,10 @@ import { Politician, PromiseModel, Vote, Rating } from '../models';
 import User from '../models/User';
 import DiarioAnalysis from '../models/DiarioAnalysis';
 import News from '../models/News';
-import { fetchAndAnalyzeDiario } from '../services/diario.service';
+import { fetchAndAnalyzeDiario, fetchLastNDiarios } from '../services/diario.service';
 import { fetchAllPoliticosTO } from '../services/tse.service';
 import { fetchAllMissingPhotos, findPhotoForPolitician } from '../services/photo.service';
-import { researchPoliticianPromises, researchAllPromises, updatePromisesStatus } from '../services/promises.service';
+import { researchPoliticianPromises, researchAllPromises, updatePromisesStatus, extractPromisesFromPlan } from '../services/promises.service';
 import { analyzePoliticianNepotism, analyzeAllNepotism } from '../services/nepotism.service';
 import { env } from '../config/env';
 
@@ -177,7 +177,8 @@ export async function researchPromises(req: AuthRequest, res: Response) {
     return res.status(503).json({ error: 'TOGETHER_API_KEY não configurada' });
   }
   try {
-    const result = await researchPoliticianPromises(Number(req.params.id));
+    const pdfUrl = req.body?.pdf_url || undefined;
+    const result = await extractPromisesFromPlan(Number(req.params.id), pdfUrl);
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -256,4 +257,15 @@ export async function deleteNepotismAlert(req: AuthRequest, res: Response) {
   if (!alert) return res.status(404).json({ error: 'Alerta não encontrado' });
   await alert.destroy();
   res.json({ message: 'Alerta removido' });
+}
+
+// POST /api/admin/diario/fetch-bulk
+export async function fetchDiarioBulk(req: AuthRequest, res: Response) {
+  const count = Math.min(Number(req.body.count) || 10, 20);
+  try {
+    const result = await fetchLastNDiarios(count);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 }

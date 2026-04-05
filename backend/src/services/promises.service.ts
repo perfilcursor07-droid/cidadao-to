@@ -1,8 +1,10 @@
 import axios from 'axios';
+import { PDFParse } from 'pdf-parse';
 import { env } from '../config/env';
 import Politician from '../models/Politician';
 import PromiseModel from '../models/Promise';
 import { searchNews, NewsArticle } from './news-search.service';
+import { searchWeb } from './websearch.service';
 
 const TOGETHER_URL = 'https://api.together.xyz/v1';
 const MODEL = 'deepseek-ai/DeepSeek-V3.1';
@@ -25,11 +27,11 @@ const MANDATE_PERIODS: Record<string, string> = {
   vereador: '2025-2028',
 };
 
-async function askAI(prompt: string): Promise<string> {
+async function askAI(prompt: string, maxTokens = 4096): Promise<string> {
   const response = await axios.post(
     `${TOGETHER_URL}/chat/completions`,
-    { model: MODEL, max_tokens: 4096, temperature: 0.2, messages: [{ role: 'user', content: prompt }] },
-    { headers: { Authorization: `Bearer ${env.TOGETHER_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 120000 }
+    { model: MODEL, max_tokens: maxTokens, temperature: 0.2, messages: [{ role: 'user', content: prompt }] },
+    { headers: { Authorization: `Bearer ${env.TOGETHER_API_KEY}`, 'Content-Type': 'application/json' }, timeout: 180000 }
   );
   return response.data.choices[0].message.content as string;
 }
@@ -40,20 +42,212 @@ function parseJSON(raw: string): any {
   } catch { return null; }
 }
 
+// ─── Download e extração de PDF ──────────────────────────────────────────────
+
+async function downloadPdfText(url: string): Promise<string> {
+  console.log(`[Promises] Baixando PDF: ${url}`);
+  const response = await axios.get(url, {
+    responseType: 'arraybuffer',
+    timeout: 60000,
+    maxRedirects: 10,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Accept': 'application/pdf,*/*',
+    },
+  });
+  console.log(`[Promises] PDF baixado: ${response.status}, ${(response.data as ArrayBuffer).byteLength} bytes`);
+  const buffer = Buffer.from(response.data as ArrayBuffer);
+  const parser = new PDFParse({ data: buffer });
+  const result = await parser.getText();
+  const text = result.text
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+  console.log(`[Promises] Texto extraído: ${text.length} caracteres`);
+  return text;
+}
+
+// ─── Busca do plano de governo na internet ───────────────────────────────────
+
+async function findGovernmentPlanUrl(name: string, role: string): Promise<string | null> {
+  // Primeiro tenta URLs conhecidas de planos de governo (G1 Promessas, TSE, etc.)
+  const nameSlug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+  const knownPatterns = [
+    `https://s3.glbimg.com/v1/AUTH_8b29beb0cbe247a296f902be2fe084b6/Promessas/${nameSlug}-TO.pdf`,
+    `https://s3.glbimg.com/v1/AUTH_8b29beb0cbe247a296f902be2fe084b6/Promessas/${name.split(' ')[0].toLowerCase()}-${name.split(' ').slice(-1)[0].toLowerCase()}-TO.pdf`,
+  ];
+
+  for (const url of knownPatterns) {
+    try {
+      console.log(`[Promises] Tentando URL conhecida: ${url}`);
+      const res = await axios.head(url, { timeout: 8000, validateStatus: s => s === 200 });
+      if (res.status === 200) {
+        console.log(`[Promises] PDF encontrado em URL conhecida: ${url}`);
+        return url;
+      }
+    } catch {}
+  }
+
+  // Busca na web
+  const queries = [
+    `${name} plano de governo PDF Tocantins`,
+    `${name} propostas campanha PDF ${MANDATE_PERIODS[role] || ''}`,
+  ];
+
+  for (const query of queries) {
+    console.log(`[Promises] Buscando plano: "${query}"`);
+    const results = await searchWeb(query, 5);
+
+    for (const r of results) {
+      const url = r.url.toLowerCase();
+      if (
+        url.endsWith('.pdf') ||
+        url.includes('plano') ||
+        url.includes('proposta') ||
+        url.includes('promessas') ||
+        url.includes('divulgacandcontas') ||
+        url.includes('s3.glbimg.com')
+      ) {
+        console.log(`[Promises] PDF encontrado via busca: ${r.url}`);
+        return r.url;
+      }
+    }
+
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  return null;
+}
+
+// ─── ETAPA 1: Extrair promessas do plano de governo ─────────────────────────
+
 /**
- * ETAPA 1: Busca notícias reais sobre o político e extrai promessas.
- * Cada promessa terá o link da notícia como fonte.
+ * Busca o plano de governo do político na internet, extrai o texto do PDF
+ * e usa IA para identificar as promessas de campanha.
+ * Aceita URL direta do PDF ou busca automaticamente.
  */
-export async function researchPoliticianPromises(politicianId: number) {
+export async function extractPromisesFromPlan(
+  politicianId: number,
+  pdfUrl?: string
+): Promise<{ politician: string; found: number; created: number; skipped: number; pdf_url: string | null }> {
   const pol = await Politician.findByPk(politicianId);
   if (!pol) throw new Error('Político não encontrado');
 
   const role = ROLE_LABELS[pol.role] || pol.role;
   const mandate = MANDATE_PERIODS[pol.role] || '2023-2026';
 
-  console.log(`[Promises] Buscando notícias de ${pol.name}...`);
+  // 1. Encontra o PDF do plano de governo
+  let url = pdfUrl?.trim() || null;
+  if (url) {
+    console.log(`[Promises] URL do PDF fornecida manualmente: ${url}`);
+  } else {
+    console.log(`[Promises] Buscando plano de governo de ${pol.name} na internet...`);
+    url = await findGovernmentPlanUrl(pol.name, pol.role);
+  }
 
-  // 1. Busca notícias reais sobre promessas do político
+  if (!url) {
+    console.log(`[Promises] Plano de governo de ${pol.name} não encontrado. Usando busca por notícias como fallback.`);
+    return fallbackResearchFromNews(politicianId);
+  }
+
+  // 2. Baixa e extrai texto do PDF
+  let pdfText: string;
+  try {
+    pdfText = await downloadPdfText(url);
+  } catch (err: any) {
+    console.error(`[Promises] Erro ao baixar PDF de ${pol.name}: ${err.message}`);
+    console.log(`[Promises] Usando fallback por notícias...`);
+    return fallbackResearchFromNews(politicianId);
+  }
+
+  if (pdfText.length < 200) {
+    console.log(`[Promises] PDF muito curto (${pdfText.length} chars). Usando fallback.`);
+    return fallbackResearchFromNews(politicianId);
+  }
+
+  console.log(`[Promises] ${pdfText.length} caracteres extraídos do plano de ${pol.name}`);
+
+  // 3. Envia para IA extrair promessas
+  const textChunk = pdfText.substring(0, 25000);
+  const prompt = `Analise o plano de governo abaixo do político ${pol.name} (${role} - ${pol.party || ''}, mandato ${mandate}, Tocantins).
+
+TEXTO DO PLANO DE GOVERNO:
+${textChunk}
+
+Extraia TODAS as promessas de campanha concretas e mensuráveis. Retorne APENAS JSON:
+{
+  "promises": [
+    {
+      "title": "título curto e objetivo da promessa (máx 100 chars)",
+      "description": "descrição detalhada do que foi prometido",
+      "area": "Saúde|Educação|Segurança|Infraestrutura|Economia|Meio Ambiente|Social|Transporte|Cultura|Outro",
+      "status": "pending",
+      "progress_pct": 0
+    }
+  ]
+}
+
+REGRAS:
+- Extraia APENAS promessas concretas (obras, programas, metas numéricas, ações específicas).
+- Ignore frases genéricas como "melhorar a saúde" sem ação concreta.
+- Cada promessa deve ser verificável (dá pra saber se cumpriu ou não).
+- Mínimo 5, máximo 30 promessas.
+- Todas começam com status "pending" e progress_pct 0.`;
+
+  const raw = await askAI(prompt, 8192);
+  const parsed = parseJSON(raw);
+  if (!parsed?.promises) {
+    return { politician: pol.name, found: 0, created: 0, skipped: 0, pdf_url: url };
+  }
+
+  let created = 0, skipped = 0;
+
+  for (const p of parsed.promises) {
+    if (!p.title) continue;
+
+    const sourceData = JSON.stringify({
+      url: url,
+      title: `Plano de Governo - ${pol.name}`,
+      source: 'Plano de Governo',
+      date: '',
+      type: 'plano_governo',
+    });
+
+    const existing = await PromiseModel.findOne({
+      where: { politician_id: politicianId, title: p.title },
+    });
+
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    await PromiseModel.create({
+      politician_id: politicianId,
+      title: p.title,
+      description: p.description || '',
+      area: p.area || 'Outro',
+      status: 'pending',
+      progress_pct: 0,
+      source_url: sourceData,
+    });
+    created++;
+  }
+
+  console.log(`[Promises] ${pol.name}: ${parsed.promises.length} promessas extraídas do plano, ${created} novas, ${skipped} já existiam`);
+  return { politician: pol.name, found: parsed.promises.length, created, skipped, pdf_url: url };
+}
+
+// ─── Fallback: busca por notícias quando não acha o plano ────────────────────
+
+async function fallbackResearchFromNews(politicianId: number) {
+  const pol = await Politician.findByPk(politicianId);
+  if (!pol) throw new Error('Político não encontrado');
+
+  const role = ROLE_LABELS[pol.role] || pol.role;
+  const mandate = MANDATE_PERIODS[pol.role] || '2023-2026';
+
   const queries = [
     `${pol.name} promessas campanha Tocantins`,
     `${pol.name} ${role} realizações obras Tocantins`,
@@ -67,20 +261,17 @@ export async function researchPoliticianPromises(politicianId: number) {
     await new Promise(r => setTimeout(r, 1000));
   }
 
-  // Remove duplicatas por URL
   const uniqueArticles = [...new Map(allArticles.map(a => [a.url, a])).values()];
-  console.log(`[Promises] ${uniqueArticles.length} notícias encontradas para ${pol.name}`);
+  console.log(`[Promises] Fallback: ${uniqueArticles.length} notícias para ${pol.name}`);
 
   if (uniqueArticles.length === 0) {
-    return { politician: pol.name, found: 0, created: 0, updated: 0, articles: 0 };
+    return { politician: pol.name, found: 0, created: 0, skipped: 0, pdf_url: null };
   }
 
-  // 2. Monta contexto com as notícias reais
   const newsContext = uniqueArticles.slice(0, 8).map((a, i) =>
     `[${i + 1}] "${a.title}" - ${a.source} (${a.date})\nURL: ${a.url}\n${a.snippet}`
   ).join('\n\n');
 
-  // 3. Pede pra IA extrair promessas DAS NOTÍCIAS (não inventar)
   const prompt = `Analise as notícias abaixo sobre o político ${pol.name} (${role} - ${pol.party || ''}, mandato ${mandate}, Tocantins).
 
 NOTÍCIAS REAIS:
@@ -103,21 +294,20 @@ Com base APENAS nas notícias acima, extraia promessas de campanha e ações do 
 REGRAS:
 - source_index: número da notícia [1], [2], etc que comprova essa promessa.
 - Extraia APENAS informações que estão nas notícias. NÃO invente.
-- status: "done" se a notícia diz que foi concluído, "progress" se está em andamento, "pending" se foi prometido mas sem ação, "failed" se foi abandonado.
+- status: "done" se concluído, "progress" se em andamento, "pending" se prometido sem ação, "failed" se abandonado.
 - Mínimo 2, máximo 8 promessas.`;
 
   const raw = await askAI(prompt);
   const parsed = parseJSON(raw);
   if (!parsed?.promises) {
-    return { politician: pol.name, found: 0, created: 0, updated: 0, articles: uniqueArticles.length };
+    return { politician: pol.name, found: 0, created: 0, skipped: 0, pdf_url: null };
   }
 
-  let created = 0, updated = 0;
+  let created = 0, skipped = 0;
 
   for (const p of parsed.promises) {
     if (!p.title) continue;
 
-    // Pega a notícia fonte pelo index
     const sourceIdx = (p.source_index || 1) - 1;
     const sourceArticle = uniqueArticles[sourceIdx] || uniqueArticles[0];
 
@@ -129,64 +319,57 @@ REGRAS:
       type: 'noticia',
     });
 
-    const [record, wasCreated] = await PromiseModel.findOrCreate({
+    const existing = await PromiseModel.findOne({
       where: { politician_id: politicianId, title: p.title },
-      defaults: {
-        politician_id: politicianId,
-        title: p.title,
-        description: p.description || '',
-        area: p.area || 'Outro',
-        status: p.status || 'pending',
-        progress_pct: Math.min(100, Math.max(0, p.progress_pct || 0)),
-        source_url: sourceData,
-      },
     });
 
-    if (!wasCreated) {
-      await record.update({
-        status: p.status || record.status,
-        progress_pct: p.progress_pct ?? record.progress_pct,
-        source_url: sourceData,
-      });
-      updated++;
-    } else {
-      created++;
+    if (existing) {
+      skipped++;
+      continue;
     }
+
+    await PromiseModel.create({
+      politician_id: politicianId,
+      title: p.title,
+      description: p.description || '',
+      area: p.area || 'Outro',
+      status: p.status || 'pending',
+      progress_pct: Math.min(100, Math.max(0, p.progress_pct || 0)),
+      source_url: sourceData,
+    });
+    created++;
   }
 
-  console.log(`[Promises] ${pol.name}: ${parsed.promises.length} extraídas, ${created} novas, ${updated} atualizadas`);
-  return { politician: pol.name, found: parsed.promises.length, created, updated, articles: uniqueArticles.length };
+  return { politician: pol.name, found: parsed.promises.length, created, skipped, pdf_url: null };
 }
 
-/**
- * ETAPA 2: Pesquisa promessas de TODOS os políticos.
- */
-export async function researchAllPromises() {
+// ─── ETAPA 2: Extrair promessas de TODOS os políticos ────────────────────────
+
+export async function extractAllPromisesFromPlans() {
   const politicians = await Politician.findAll({ where: { active: true } });
   const details: any[] = [];
-  let total_found = 0, total_created = 0, total_updated = 0;
+  let total_found = 0, total_created = 0;
 
   for (const pol of politicians) {
     try {
-      const result = await researchPoliticianPromises(pol.id);
+      const result = await extractPromisesFromPlan(pol.id);
       details.push(result);
       total_found += result.found;
       total_created += result.created;
-      total_updated += result.updated;
     } catch (err: any) {
       console.error(`[Promises] Erro com ${pol.name}: ${err.message}`);
-      details.push({ politician: pol.name, found: 0, created: 0, updated: 0 });
+      details.push({ politician: pol.name, found: 0, created: 0, skipped: 0, pdf_url: null, error: err.message });
     }
-    // Delay entre políticos
     await new Promise(r => setTimeout(r, 3000));
   }
 
-  return { total_politicians: politicians.length, total_found, total_created, total_updated, details };
+  return { total_politicians: politicians.length, total_found, total_created, details };
 }
 
+// ─── ETAPA 3: Verificar cumprimento via notícias ─────────────────────────────
+
 /**
- * ETAPA 3: Atualiza status das promessas buscando notícias recentes.
- * Roda diariamente via cron job.
+ * Pesquisa notícias recentes e atualiza o status das promessas pendentes.
  */
 export async function updatePromisesStatus() {
   const promises = await PromiseModel.findAll({
@@ -212,15 +395,27 @@ export async function updatePromisesStatus() {
     if (!pol) continue;
 
     // Busca notícias recentes sobre o político
-    const articles = await searchNews(`${pol.name} Tocantins realizações obras`, 5);
-    if (articles.length === 0) continue;
+    const queries = [
+      `${pol.name} Tocantins realizações obras 2024 2025 2026`,
+      `${pol.name} cumpriu promessa Tocantins`,
+    ];
 
-    const newsContext = articles.slice(0, 5).map((a, i) =>
+    const allArticles: NewsArticle[] = [];
+    for (const q of queries) {
+      const articles = await searchNews(q, 5);
+      allArticles.push(...articles);
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    const uniqueArticles = [...new Map(allArticles.map(a => [a.url, a])).values()];
+    if (uniqueArticles.length === 0) continue;
+
+    const newsContext = uniqueArticles.slice(0, 8).map((a, i) =>
       `[${i + 1}] "${a.title}" - ${a.source}\nURL: ${a.url}\n${a.snippet}`
     ).join('\n\n');
 
     const promisesList = polPromises.map(p =>
-      `- "${p.title}" (status: ${p.status}, ${p.progress_pct}%)`
+      `- "${p.title}" (status: ${p.status}, ${p.progress_pct}%): ${p.description || ''}`
     ).join('\n');
 
     const prompt = `Com base nas notícias recentes, atualize o status das promessas do político ${pol.name}:
@@ -235,15 +430,22 @@ Retorne APENAS JSON:
 {
   "updates": [
     {
-      "title": "título exato da promessa",
+      "title": "título EXATO da promessa (copie igual)",
       "status": "pending|progress|done|failed",
       "progress_pct": 0-100,
       "source_index": 1,
-      "reason": "por que mudou"
+      "reason": "evidência da notícia que justifica a mudança"
     }
   ]
 }
-Só inclua promessas que MUDARAM de status baseado nas notícias.`;
+
+REGRAS:
+- Só inclua promessas que MUDARAM de status baseado nas notícias.
+- source_index: número da notícia que comprova.
+- Se a notícia mostra obra concluída → done (100%).
+- Se mostra obra em andamento → progress (estimar %).
+- Se mostra que foi cancelada/abandonada → failed.
+- NÃO mude status sem evidência clara na notícia.`;
 
     try {
       const raw = await askAI(prompt);
@@ -253,13 +455,13 @@ Só inclua promessas que MUDARAM de status baseado nas notícias.`;
         const promise = polPromises.find(p => p.title === u.title);
         if (!promise || promise.status === u.status) continue;
 
-        const sourceArticle = articles[(u.source_index || 1) - 1] || articles[0];
+        const sourceArticle = uniqueArticles[(u.source_index || 1) - 1] || uniqueArticles[0];
         const sourceData = JSON.stringify({
           url: sourceArticle?.url || '',
           title: sourceArticle?.title || '',
           source: sourceArticle?.source || '',
           date: sourceArticle?.date || '',
-          type: 'noticia',
+          type: 'verificacao_noticia',
         });
 
         await promise.update({
@@ -287,3 +489,8 @@ Só inclua promessas que MUDARAM de status baseado nas notícias.`;
 
   return { updated, details };
 }
+
+// ─── Exports legados (mantém compatibilidade) ───────────────────────────────
+
+export { extractPromisesFromPlan as researchPoliticianPromises };
+export { extractAllPromisesFromPlans as researchAllPromises };
