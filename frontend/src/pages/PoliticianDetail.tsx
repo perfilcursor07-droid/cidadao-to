@@ -35,8 +35,8 @@ export default function PoliticianDetail() {
 
   const isVereador = politician?.role === 'vereador';
   const now = new Date();
-  const [salaryAno, setSalaryAno] = useState(now.getFullYear());
-  const [salaryMes, setSalaryMes] = useState(now.getMonth() + 1);
+  const [salaryAno, setSalaryAno] = useState(now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+  const [salaryMes, setSalaryMes] = useState(now.getMonth() === 0 ? 12 : now.getMonth());
 
   const { data: salaryData, isLoading: salaryLoading } = useQuery<{ politician_id: number; politician_name: string; total: number; dados: any[] }>({
     queryKey: ['salary-politician', politicianId, salaryAno, salaryMes],
