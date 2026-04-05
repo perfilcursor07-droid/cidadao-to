@@ -67,19 +67,19 @@ export default function Home() {
       {top3.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl overflow-hidden border border-white/5 shadow-xl">
-          <div className="px-5 py-4 flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-red/20 flex items-center justify-center">
-                <span className="text-xl animate-pulse">🔥</span>
+          <div className="px-4 py-3 sm:px-5 sm:py-4 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-red/20 flex items-center justify-center">
+                <span className="text-base sm:text-xl animate-pulse">🔥</span>
               </div>
               <div>
-                <h2 className="text-sm font-bold text-white">Custômetro da Câmara</h2>
-                <p className="text-[10px] text-white/40">{meses[mesRef]}/{anoRef} · Gabinetes mais caros</p>
+                <h2 className="text-xs sm:text-sm font-bold text-white">Custômetro da Câmara</h2>
+                <p className="text-[9px] sm:text-[10px] text-white/40">{meses[mesRef]}/{anoRef} · Gabinetes mais caros</p>
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[9px] text-white/30 uppercase tracking-wider">Custo total/mês</p>
-              <p className="text-lg font-black text-red tabular-nums leading-tight">
+              <p className="text-[8px] sm:text-[9px] text-white/30 uppercase tracking-wider">Custo total/mês</p>
+              <p className="text-sm sm:text-lg font-black text-red tabular-nums leading-tight">
                 <AnimatedCurrency value={custoTotal} />
               </p>
             </div>
@@ -88,20 +88,20 @@ export default function Home() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/[0.04]">
             {top3.map((r, i) => (
               <Link key={r.id} to={`/politicians/${r.id}`}
-                className="relative bg-gray-900 px-4 py-4 hover:bg-gray-800 transition-colors group">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">{medals[i]}</span>
-                  <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                className="relative bg-gray-900 px-3 py-3 sm:px-4 sm:py-4 hover:bg-gray-800 transition-colors group">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="text-base sm:text-lg">{medals[i]}</span>
+                  <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
                     i === 0 ? 'bg-red/20 text-red' : i === 1 ? 'bg-orange-400/20 text-orange-400' : 'bg-yellow-400/20 text-yellow-400'
                   }`}>#{i + 1}</span>
                 </div>
-                <p className="text-sm font-bold text-white truncate group-hover:text-red transition-colors">{r.name}</p>
-                <p className="text-lg font-black text-white tabular-nums mt-1">{fmt(r.total)}</p>
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-[10px] text-white/30">{r.func} func.</span>
-                  <span className="text-[10px] text-green/70">Salário: {fmt(r.salario)}</span>
+                <p className="text-xs sm:text-sm font-bold text-white truncate group-hover:text-red transition-colors">{r.name}</p>
+                <p className="text-sm sm:text-lg font-black text-white tabular-nums mt-0.5 sm:mt-1">{fmt(r.total)}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[9px] sm:text-[10px] text-white/30">{r.func} func.</span>
+                  <span className="text-[9px] sm:text-[10px] text-green/70">Sal: {fmt(r.salario)}</span>
                 </div>
-                <div className="mt-2 h-1 bg-white/[0.06] rounded-full overflow-hidden">
+                <div className="mt-1.5 h-1 bg-white/[0.06] rounded-full overflow-hidden">
                   <motion.div initial={{ width: 0 }} animate={{ width: `${(r.total / (ranking[0]?.total || 1)) * 100}%` }}
                     transition={{ duration: 1.2, delay: 0.3 + i * 0.15 }}
                     className={`h-full rounded-full ${i === 0 ? 'bg-red' : i === 1 ? 'bg-orange-400' : 'bg-yellow-400'}`} />
