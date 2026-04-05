@@ -62,21 +62,6 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
-      {/* Hero */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-lg bg-gradient-to-r from-green-dark via-green to-green-light px-5 py-3.5 text-white">
-        <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'40\' height=\'40\' viewBox=\'0 0 40 40\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'%23fff\'%3E%3Cpath d=\'M20 20v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4z\'/%3E%3C/g%3E%3C/svg%3E")' }} />
-        <div className="relative z-10 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-4">
-            <h1 className="text-base md:text-lg font-bold">Fiscalize. Avalie. Cobre.</h1>
-            <span className="hidden sm:inline text-xs text-white/70">Transparência política do Tocantins</span>
-          </div>
-          <div className="flex gap-2">
-            <Link to="/politicians" className="bg-white text-green font-semibold text-xs px-3.5 py-1.5 rounded-md hover:bg-white/90 transition-colors shadow-sm">🏛️ Políticos</Link>
-            <Link to="/salaries" className="bg-white/15 backdrop-blur text-white font-semibold text-xs px-3.5 py-1.5 rounded-md hover:bg-white/25 transition-colors border border-white/20">💰 Salários</Link>
-          </div>
-        </div>
-      </motion.div>
 
       {/* Custômetro compacto */}
       {top3.length > 0 && (
