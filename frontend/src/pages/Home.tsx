@@ -85,7 +85,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-px bg-white/[0.04]">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-white/[0.04]">
             {top3.map((r, i) => (
               <Link key={r.id} to={`/politicians/${r.id}`}
                 className="relative bg-gray-900 px-4 py-4 hover:bg-gray-800 transition-colors group">
